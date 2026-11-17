@@ -1,0 +1,8 @@
+# Rust
+core/target/
+
+# OS / editors
+.DS_Store
+*.swp
+.idea/
+.vscode/

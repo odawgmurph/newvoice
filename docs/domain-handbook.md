@@ -38,7 +38,7 @@ The most important thing to know is that a voice usually sounds feminine because
 | "Gender-ambiguous" zone | ~145–175 Hz | Varies by study and language; this is where resonance and weight decide perception |
 | Lowest heard as female in trans speakers | ~164 Hz (≈E3) | Gelfer & Schofield 2000\[4\] |
 | Feminine ratings | ≥~180 Hz (≈F#3) | Associated with feminine ratings in older studies\[5\] |
-| Cis women (adult) | ~180–230 Hz (≈F#3–A#3) | US norms; Hillenbrand vowel F0 means of roughly 138 Hz (men) and 227 Hz (women) were recalled from memory and are unverified |
+| Cis women (adult) | ~180–230 Hz (≈F#3–A#3) | US norms. Computed from Hillenbrand (1995) raw data: per-speaker median F0 averages 130 Hz for men (n=45) and 219 Hz for women (n=48); the often-quoted 138/227 Hz are the /i/ "heed" means (`content/norms/reference_norms.json`) |
 | Coach "sweet spot" for training | 170–200 Hz | Sumian; she suggests about 200 Hz (≈G3) as a training pitch for most learners\[10\]\[17\] |
 
 **Interactions.** Sumian describes an inverse link between pitch and weight: going higher usually lightens the voice, and going lower adds weight.\[10\]\[18\] Raising pitch alone with a heavy voice produces strain or a falsetto-like "Mickey Mouse" quality. A higher comfortable range makes a given resonance easier to hold, but it "does not raise resonance directly" (Sumian).\[10\] Low-pitched feminine voices are possible but require very good control of weight and microbehaviours.\[19\]
@@ -76,7 +76,7 @@ The most important thing to know is that a voice usually sounds feminine because
 | /ʊ/ hood | 469 | 1122 | 519 | 1225 | 1.09 |
 | /u/ who'd | 378 | 997 | 459 | 1105 | 1.11 |
 
-F3 values from a secondary (commercial) source, unverified against the original: men /i/ 3000, /æ/ 2601, /ɑ/ 2522, /u/ 2343; women /i/ 3372, /æ/ 2972, /ɑ/ 2815, /u/ 2735.\[20\] Values for /ɔ/ and /ɝ/, and Peterson & Barney (1952) values, were recalled from memory and could not be verified, so they are left out. For production use, compute group means directly from Hillenbrand's per-token data (`vowdata.dat`, or the phonTools `h95` R dataset of 1,668 tokens, in which 10 missing F2 values and 41 missing F3 values are imputed).\[23\]\[24\]
+**Verified against raw data (Nov 2026).** `harness/norms/build_norms.py` computes these means directly from Hillenbrand's per-token `vowdata.dat`, with unmeasurable values excluded rather than imputed, and writes them to `content/norms/reference_norms.json`. The app uses that file, not this table.\[24\] The table above agrees with the raw-data means within 2% for every vowel; /ɛ æ ɑ ʌ/ differ most, probably because of differences in which tokens were included. Raw-data F3 means: men /i/ 3001, /æ/ 2595, /ɑ/ 2535, /u/ 2355; women /i/ 3373, /æ/ 2973, /ɑ/ 2832, /u/ 2735. This confirms the secondary-source values within about 0.6%.\[20\] The raw data also gives the vowels missing above: /ɔ/ "hawed" is men 656 / 1023 and women 804 / 1188 (F1 / F2); /ɝ/ "heard" is men 475 / 1379 and women 524 / 1588, with a low F3 (1711 / 1930) characteristic of r-colouring. Peterson & Barney (1952) values remain unverified and are left out.\[23\]
 
 **Coach target:** Sumian says an /a/ F1 of about 700–800 Hz "seems to be about the minimum that most people can do in a feminine configuration", and that F1 above about 1200 Hz "sounds out of place".\[10\] This matches the women's /ɑ/ F1 of 936 Hz above.
 
@@ -433,7 +433,7 @@ Exercise types: listen-and-discriminate, match the pitch, hold the target, siren
 - "Vocal weight" and "microbehaviours" are community constructs with no validated acoustic definition. Treat the proposed indices as heuristics.
 - Formant estimation at high F0 and for voices in transition is unreliable. Show confidence and prefer averaged, vowel-aligned measures.
 - The coaching claim that pitch is not gendered conflicts with lab findings. Both likely capture part of the truth, because weight and F0 are confounded in natural speech.
-- Some reference values here (F0 means by sex in Hillenbrand, F3 values, /ɔ/ and /ɝ/ formants, Peterson & Barney) were not verified against the primary tables. Compute them from the raw data before shipping.
+- Hillenbrand F0, F3, /ɔ/ and /ɝ/ values have now been computed from the raw data (see `content/norms/reference_norms.json`). Peterson & Barney values remain unverified and are not used.
 - The TruVox efficacy data come from a terminated, uncontrolled trial with 6 participants. Biofeedback efficacy for trans voice is promising but not established.
 - Gamification evidence (Duolingo) concerns declarative learning. Its transfer to vocal motor learning is untested.
 
