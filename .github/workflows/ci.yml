@@ -1,8 +1,13 @@
 name: CI
 
+# Push runs only on the default branch: on any other branch a push would
+# duplicate the pull_request run (different refs, so concurrency can't
+# cancel either). Run on a branch without a PR by hand via workflow_dispatch.
 on:
   push:
+    branches: [dev]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

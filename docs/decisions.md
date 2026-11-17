@@ -84,6 +84,7 @@ Choices made while building `newvoice-core`. The evidence for each is in [`valid
 - The harness uses Parselmouth (GPL), NumPy and SciPy as **dev** dependencies only (D5).
 - The CI gates are F0 within ±1% of Praat and of ground truth, and F1–F3 within ±5% of Praat at the same ceiling. Accuracy against the known formants of the synthetic vowels is gated as well, with a looser F1 limit from 200 Hz F0 up, where LPC is known to snap to harmonics.
 - `uv run python -m validation.report` regenerates `docs/validation/stage1-synthetic.md`. Rerun it, and commit the result, with any change to the analysis.
+- **CI triggers (supersedes D7's "every push and PR").** CI runs on pull requests, on pushes to `dev`, and by hand (`workflow_dispatch`). Before this, a push to a branch with an open PR started two identical runs, one for `push` and one for `pull_request`, and the concurrency group could not cancel either because their refs differ.
 
 ## D10 · Voice-quality measures (Stage 1)
 
