@@ -213,24 +213,51 @@ impl FormantAnalyser {
     }
 }
 
+/// How one ceiling scored in a [`sweep`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CeilingScore {
+    pub ceiling_hz: f64,
+    /// Sum over F1–F3 of each track's mean absolute deviation from a cubic
+    /// fit in time (Hz). Infinite when F1–F3 weren't found in most frames.
+    pub track_error_hz: f64,
+    /// Sum over F1–F3 of how far the median formant moves when the ceiling
+    /// steps to its neighbours (Hz, averaged over the neighbours that work).
+    pub instability_hz: f64,
+}
+
+impl CeilingScore {
+    /// Lower is better.
+    pub fn total(&self) -> f64 {
+        self.track_error_hz + self.instability_hz
+    }
+}
+
 /// The outcome of a [`sweep`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct SweepResult {
-    /// The ceiling with the smoothest F1–F3 tracks.
+    /// The chosen ceiling.
     pub ceiling_hz: f64,
     /// Frames at the chosen ceiling, one per requested time.
     pub frames: Vec<FormantFrame>,
-    /// (ceiling, track error) for every ceiling tried; error is infinite when
-    /// a ceiling failed to find F1–F3 in most frames.
-    pub errors: Vec<(f64, f64)>,
+    /// Every ceiling tried, in order.
+    pub scores: Vec<CeilingScore>,
 }
 
 /// Fraction of frames that must contain a formant for its track to count.
 const MIN_TRACK_COVERAGE: f64 = 0.8;
+/// Instability charged against a side with no usable neighbour.
+const MISSING_NEIGHBOUR_HZ: f64 = 500.0;
 
-/// Analyses the frames at `times` with each ceiling and keeps the one whose
-/// F1–F3 tracks deviate least from smooth (cubic) fits. Returns `None` when
-/// no ceiling produced usable tracks.
+/// Analyses the frames at `times` at each ceiling and keeps the best one.
+///
+/// Two things mark a good ceiling, and both are measured in Hz so they add
+/// without weights: its F1–F3 tracks are smooth in time (Fast Track's
+/// criterion), and its answer barely changes when the ceiling is nudged to
+/// the neighbouring values. A wrong ceiling splits, merges or skips a
+/// formant, which shows as a jump between neighbouring ceilings. The second
+/// term matters for sustained vowels, where every ceiling's tracks are
+/// smooth and the first term alone can't choose. `ceilings` should be sorted
+/// and evenly spaced. Returns `None` when no ceiling produced usable tracks.
 pub fn sweep(
     src: impl Fn(i64) -> f32 + Copy,
     in_rate: f64,
@@ -238,28 +265,72 @@ pub fn sweep(
     base: &FormantConfig,
     ceilings: &[f64],
 ) -> Option<SweepResult> {
-    let mut best: Option<(f64, f64, Vec<FormantFrame>)> = None;
-    let mut errors = Vec::with_capacity(ceilings.len());
-    for &ceiling in ceilings {
-        let mut analyser = FormantAnalyser::new(
-            in_rate,
-            FormantConfig {
-                ceiling_hz: ceiling,
-                ..base.clone()
-            },
-        );
-        let frames: Vec<FormantFrame> = times.iter().map(|&t| analyser.analyse(src, t)).collect();
-        let error = track_error(times, &frames);
-        errors.push((ceiling, error));
-        if error.is_finite() && best.as_ref().is_none_or(|(_, e, _)| error < *e) {
-            best = Some((ceiling, error, frames));
-        }
-    }
-    let (ceiling_hz, _, frames) = best?;
+    let analyses: Vec<(Vec<FormantFrame>, f64, Option<[f64; 3]>)> = ceilings
+        .iter()
+        .map(|&ceiling| {
+            let mut analyser = FormantAnalyser::new(
+                in_rate,
+                FormantConfig {
+                    ceiling_hz: ceiling,
+                    ..base.clone()
+                },
+            );
+            let frames: Vec<FormantFrame> =
+                times.iter().map(|&t| analyser.analyse(src, t)).collect();
+            let error = track_error(times, &frames);
+            let medians = error.is_finite().then(|| median_tracks(&frames));
+            (frames, error, medians)
+        })
+        .collect();
+
+    let shift =
+        |a: &[f64; 3], b: &[f64; 3]| -> f64 { a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum() };
+    let scores: Vec<CeilingScore> = analyses
+        .iter()
+        .enumerate()
+        .map(|(i, (_, error, medians))| {
+            let instability = medians.map_or(f64::INFINITY, |m| {
+                let side = |j: Option<usize>| -> f64 {
+                    j.and_then(|j| analyses.get(j))
+                        .and_then(|(_, _, n)| n.as_ref())
+                        .map_or(MISSING_NEIGHBOUR_HZ, |n| shift(&m, n))
+                };
+                // At either end of the range only one neighbour exists.
+                let below = (i > 0).then(|| side(Some(i - 1)));
+                let above = (i + 1 < analyses.len()).then(|| side(Some(i + 1)));
+                match (below, above) {
+                    (Some(a), Some(b)) => 0.5 * (a + b),
+                    (Some(a), None) | (None, Some(a)) => a,
+                    (None, None) => 0.0,
+                }
+            });
+            CeilingScore {
+                ceiling_hz: ceilings[i],
+                track_error_hz: *error,
+                instability_hz: instability,
+            }
+        })
+        .collect();
+
+    let best = scores
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.total().is_finite())
+        .min_by(|(_, a), (_, b)| a.total().total_cmp(&b.total()))
+        .map(|(i, _)| i)?;
+    let (frames, _, _) = analyses.into_iter().nth(best).expect("index in range");
     Some(SweepResult {
-        ceiling_hz,
+        ceiling_hz: ceilings[best],
         frames,
-        errors,
+        scores,
+    })
+}
+
+/// Median F1–F3 over frames (each over the frames that have it).
+fn median_tracks(frames: &[FormantFrame]) -> [f64; 3] {
+    std::array::from_fn(|k| {
+        let v: Vec<f64> = frames.iter().filter_map(|f| f.frequency(k)).collect();
+        crate::units::median(&v).unwrap_or(f64::NAN)
     })
 }
 
@@ -471,7 +542,7 @@ mod tests {
                 &SWEEP_CEILINGS_HZ,
             )
             .unwrap();
-            assert_eq!(r.errors.len(), SWEEP_CEILINGS_HZ.len());
+            assert_eq!(r.scores.len(), SWEEP_CEILINGS_HZ.len());
             assert_close(&median_formants(&r.frames), &formants, 0.05);
         }
     }

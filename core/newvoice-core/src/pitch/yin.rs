@@ -21,11 +21,15 @@ pub fn estimate(
     scratch.resize(2 * (top + 1), 0.0);
     let (diff, d) = scratch.split_at_mut(top + 1);
 
-    // Difference function d(τ) = Σ_{j<W} (x_j − x_{j+τ})²
+    // Difference function d(τ) = Σ_{j<W} (x_{s+j} − x_{s+j+τ})², with the
+    // compared span [s, s + W + τ) centred in the frame for every lag. (The
+    // textbook s = 0 puts short lags early in the frame, which skews the
+    // estimate in time and biases it on glides.)
     for (tau, dt) in diff.iter_mut().enumerate().skip(1) {
-        *dt = x[..window]
+        let s = (top - tau) / 2;
+        *dt = x[s..s + window]
             .iter()
-            .zip(&x[tau..tau + window])
+            .zip(&x[s + tau..s + tau + window])
             .map(|(a, b)| (a - b) * (a - b))
             .sum();
     }

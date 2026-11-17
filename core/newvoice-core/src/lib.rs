@@ -3,13 +3,18 @@
 //! Platform-independent DSP shared by the iOS, Android and WebAssembly builds.
 //! Keep it free of platform and FFI code: bindings live in `newvoice-ffi`.
 
+pub mod analysis;
 pub mod formant;
 pub mod lpc;
 pub mod pitch;
 pub mod resample;
 pub mod roots;
 pub mod units;
+pub mod vowel;
 pub mod vtl;
+
+pub use analysis::{Analysis, Config, Frame, StreamAnalyser, analyse};
+pub use vowel::{VowelConfig, VowelMeasurement, measure_vowel};
 
 #[cfg(test)]
 pub(crate) mod testsig;
