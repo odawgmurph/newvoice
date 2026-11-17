@@ -1,0 +1,17 @@
+[package]
+name = "newvoice-cli"
+description = "Command-line front end to newvoice-core for the validation harness (test tooling; never shipped)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+newvoice-core = { path = "../newvoice-core" }
+hound = "3.5"
+serde_json = "1"
+
+[lints]
+workspace = true

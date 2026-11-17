@@ -64,3 +64,37 @@ CI (`.github/workflows/ci.yml`) runs on every push and PR:
 - App typecheck
 
 macOS runners are free while the repo is public.
+
+## D8 · Analysis core design (Stage 1)
+
+Choices made while building `newvoice-core`. The evidence for each is in [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md).
+
+- **No runtime dependencies.** The core is plain Rust (DSP, LPC, root finding and resampling written in-crate), so the licence review stays trivial and the same code builds for iOS, Android and WebAssembly.
+- **Fixed internal rates.** Pitch runs at 16 kHz and formants at 2 × the ceiling, as in Praat. Input at any capture rate is resampled by windowed-sinc interpolation onto a fixed output grid, and the grid samples are cached so overlapping frames share work.
+- **One frame grid for batch and live.** Frame *k* is centred at *k* × 10 ms. `StreamAnalyser` and `analyse` run the same per-frame code on the same samples, and a test checks that they produce identical frames for any chunk size.
+- **Live latency.** Frames are emitted 50 ms after their window closes (about 78 ms after their centre), so the octave-jump guard can confirm a 50 ms run before showing it. Analysis cost is about 4% of the 10 ms hop on x86. The Stage 2 ARM measurement uses `newvoice-cli bench`.
+- **Pitch.** YIN is the default and MPM the alternative; both are within 1% of Praat on the corpus. YIN compares a span centred in the frame for every lag, because the textbook form skews glides by about 0.6%. Semitones use the MIDI scale (A4 = 69), so a reading is also a note number.
+- **Formants.** These follow Praat's Burg method exactly, plus one deliberate difference: poles wider than 1000 Hz are dropped before numbering F1, F2 and so on. Those poles model spectral tilt rather than resonances, and in Praat's raw output they often take the F2 slot. The harness compares against Praat with the same filter (worst difference ≤ 1.1%). **Revisit the 1000 Hz value once real recordings are in the corpus.**
+- **Ceiling sweep.** For sustained vowels, 4500–6500 Hz in 250 Hz steps. The score is Fast Track's track smoothness plus how much F1–F3 move when the ceiling steps to its neighbours, both in Hz. Smoothness alone cannot choose between ceilings on a steady vowel. The ceiling chosen on the baseline vowels becomes the user's live ceiling.
+- **Formant confidence is provisional.** A hand-set function of F0 and the F1/F2 bandwidths, until it can be fitted to measured error.
+
+## D9 · Validation tooling
+
+- `core/newvoice-cli` runs the core on WAV files and prints JSON. It is test tooling and is never shipped, so it may use crates (hound, serde_json) that the core does not.
+- The harness uses Parselmouth (GPL), NumPy and SciPy as **dev** dependencies only (D5).
+- The CI gates are F0 within ±1% of Praat and of ground truth, and F1–F3 within ±5% of Praat at the same ceiling. Accuracy against the known formants of the synthetic vowels is gated as well, with a looser F1 limit from 200 Hz F0 up, where LPC is known to snap to harmonics.
+- `uv run python -m validation.report` regenerates `docs/validation/stage1-synthetic.md`. Rerun it, and commit the result, with any change to the analysis.
+- **CI triggers (supersedes D7's "every push and PR").** CI runs on pull requests, on pushes to `dev`, and by hand (`workflow_dispatch`). Before this, a push to a branch with an open PR started two identical runs, one for `push` and one for `pull_request`, and the concurrency group could not cancel either because their refs differ.
+
+## D10 · Voice-quality measures (Stage 1)
+
+Evidence for each choice is in [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md), under "Voice quality" and "Octave traps".
+
+- **Live per-frame measures.** Every voiced frame carries H1–H2, H1*–H2*, alpha ratio, Hammarberg index and L/H ratio, computed on the 16 kHz pitch frame. This adds about 0.15 ms per frame. The band edges are part of each measure's definition (alpha 50 Hz–1 kHz against 1–5 kHz; Hammarberg 0–2 kHz against 2–5 kHz; L/H 50 Hz–4 kHz against 4–8 kHz). Changing a band edge, or any other definition, bumps `QUALITY_VERSION`, because stored baselines are only comparable within one version.
+- **Harmonic amplitudes** come from maximising the windowed DTFT near k·F0, not from FFT bins.
+- **H1*–H2*** uses the Iseli–Alwan correction with Hawks & Miller formula bandwidths, as VoiceSauce does. LPC bandwidths are not used because they are unreliable at high F0. The correction is accurate away from F1 but can be several dB off when H1 or H2 sits on F1. Within one vowel, uncorrected H1–H2 changes exactly with the source. Users are therefore only ever compared with their own baseline on the same vowel.
+- **CPPS and HNR replicate Praat**, so values compare with the literature: CPPS follows Praat 6.1's `To PowerCepstrogram` + `Get CPPS` with default settings, and HNR follows `To Harmonicity (ac)`, the Gaussian-window variant. Both are batch measures for finished utterances.
+- **Jitter and shimmer** use a cleaner cycle tracker than Praat's point process (cross-correlation between consecutive cycles, guided by the F0 track, bridging voicing gaps of up to 30 ms). Praat's validity rules and its amplitude definition (Hann-windowed RMS over ±0.2 periods) are kept. The results agree with Praat to within 10–15%.
+- **Weight index (heuristic, `WEIGHT_INDEX_VERSION` 1).** The mean of three z-scores against the user's baseline: −(H1*–H2*), alpha ratio and CPPS. The SDs are floored at 1.5 dB, 1 dB and 0.75 dB respectively. Live frames have no CPPS, so a live index uses the other two. It must be presented as a proxy until the Stage 10 listener study.
+- **Pitch octave guard (supersedes D8's "first good candidate" behaviour).** With a weak fundamental and H2 on F1, both YIN and MPM read an octave high, while Praat did not. Now, when the double period's normalised square difference (sub-sample, NSDF) leaves under a quarter of the chosen lag's aperiodicity, the estimator switches to the double period. That only happens when the chosen lag is clearly imperfect (aperiodicity above 0.02). A Praat-style global octave cost was tried first and rejected: on jittery voices it caused sub-harmonic errors, 27% of frames at 300 Hz with 1% jitter. Golden tests now cover both traps.
+- **Still YIN by default.** MPM degrades less than YIN on strongly jittered voices (beyond about 2%). Revisit the default with real recordings.
