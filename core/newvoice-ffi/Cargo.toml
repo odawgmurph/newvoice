@@ -1,0 +1,17 @@
+[package]
+name = "newvoice-ffi"
+description = "UniFFI bindings (Swift, Kotlin) for newvoice-core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "newvoice_ffi"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+newvoice-core = { path = "../newvoice-core" }
+uniffi = "0.32"

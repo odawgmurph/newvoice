@@ -1,0 +1,26 @@
+NewVoice
+Copyright 2026 The NewVoice Authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The NewVoice name and icon are not covered by this license; see TRADEMARKS.md.
+
+Portions of app/ were generated from the Expo "blank-typescript" template,
+Copyright (c) 2015-present 650 Industries, Inc., under the MIT License.
+
+content/norms/reference_norms.json contains statistics derived from:
+  Hillenbrand, J., Getty, L. A., Clark, M. J., & Wheeler, K. (1995).
+  Acoustic characteristics of American English vowels. JASA 97(5), 3099-3111.
+  Vowel data (c) 1995 James Hillenbrand. The raw data is not redistributed.
+
+----------------------------------------------------------------------------
+THE MARGARITA CLAUSE (Beerware-style)
+
+If you use, fork, ship or profit from this software, you owe odawgmurph a
+margarita. Rocks or frozen, salt optional, tequila mandatory.
+
+This clause is a social obligation, not a legal one. Under Section 4(d) of
+the Apache License, every redistribution must carry this NOTICE file, so the
+debt travels with the code. It does not add a condition to the License, and
+nobody's use of the software depends on paying it.
+----------------------------------------------------------------------------
