@@ -6,6 +6,7 @@
 //! straight from the input samples, batch and streaming analysis read exactly
 //! the same values for a given frame.
 
+use std::collections::VecDeque;
 use std::f64::consts::PI;
 
 /// Zero crossings of the sinc kernel on each side, at the lower of the two rates.
@@ -93,28 +94,100 @@ impl Resampler {
             return;
         }
         let step = self.in_rate / self.out_rate;
-        let units_per_sample = 2.0 * self.cutoff * TABLE_OVERSAMPLE as f64;
-        let hw = self.half_width;
         for (j, o) in out.iter_mut().enumerate() {
-            let pos = start + j as f64 * step;
-            let lo = (pos - hw).ceil() as i64;
-            let hi = (pos + hw).floor() as i64;
-            let mut acc = 0.0;
-            for i in lo..=hi {
-                let x = src(i);
-                if x == 0.0 {
-                    continue;
-                }
-                let k = (pos - i as f64).abs() * units_per_sample;
-                let idx = k as usize;
-                let frac = k - idx as f64;
-                if idx + 1 >= self.table.len() {
-                    continue;
-                }
-                let w = self.table[idx] + frac * (self.table[idx + 1] - self.table[idx]);
-                acc += f64::from(x) * w;
+            *o = self.value_at(&src, start + j as f64 * step);
+        }
+    }
+
+    /// Fills `out` with output-grid samples `start, start + 1, …`, where grid
+    /// sample `j` is the signal at time `j / out_rate`. Each value depends
+    /// only on `j` and the input, never on how the range was split up.
+    pub fn render_grid(&self, src: impl Fn(i64) -> f32, start: i64, out: &mut [f64]) {
+        let step = self.in_rate / self.out_rate;
+        for (o, j) in out.iter_mut().zip(start..) {
+            *o = if self.identity {
+                f64::from(src(j))
+            } else {
+                self.value_at(&src, j as f64 * step)
+            };
+        }
+    }
+
+    /// The band-limited input signal at input-sample position `pos`.
+    fn value_at(&self, src: &impl Fn(i64) -> f32, pos: f64) -> f64 {
+        let units_per_sample = 2.0 * self.cutoff * TABLE_OVERSAMPLE as f64;
+        let lo = (pos - self.half_width).ceil() as i64;
+        let hi = (pos + self.half_width).floor() as i64;
+        let last = self.table.len() - 1;
+        let mut acc = 0.0;
+        for i in lo..=hi {
+            let k = (pos - i as f64).abs() * units_per_sample;
+            let idx = k as usize;
+            if idx >= last {
+                continue;
             }
-            *o = acc;
+            let frac = k - idx as f64;
+            let w = self.table[idx] + frac * (self.table[idx + 1] - self.table[idx]);
+            acc += f64::from(src(i)) * w;
+        }
+        acc
+    }
+}
+
+/// A resampled signal on the output grid (sample `j` at `j / out_rate`),
+/// computed on demand and cached, so overlapping analysis windows share work.
+#[derive(Debug, Clone)]
+pub struct GridResampler {
+    rs: Resampler,
+    /// Grid index of `cache[0]`.
+    first: i64,
+    cache: VecDeque<f64>,
+    scratch: Vec<f64>,
+}
+
+impl GridResampler {
+    pub fn new(in_rate: f64, out_rate: f64) -> Self {
+        Self {
+            rs: Resampler::new(in_rate, out_rate),
+            first: 0,
+            cache: VecDeque::new(),
+            scratch: Vec::new(),
+        }
+    }
+
+    pub fn resampler(&self) -> &Resampler {
+        &self.rs
+    }
+
+    /// Copies grid samples `start .. start + out.len()` into `out`.
+    ///
+    /// Samples not cached yet are computed from `src`; the caller must only
+    /// ask for samples whose input is final (see
+    /// [`Resampler::half_width_samples`]).
+    pub fn read(&mut self, src: impl Fn(i64) -> f32, start: i64, out: &mut [f64]) {
+        let cached_end = self.first + self.cache.len() as i64;
+        if self.cache.is_empty() || start < self.first || start > cached_end {
+            self.cache.clear();
+            self.first = start;
+        }
+        let cached_end = self.first + self.cache.len() as i64;
+        let end = start + out.len() as i64;
+        if end > cached_end {
+            self.scratch.clear();
+            self.scratch.resize((end - cached_end) as usize, 0.0);
+            self.rs.render_grid(&src, cached_end, &mut self.scratch);
+            self.cache.extend(&self.scratch);
+        }
+        let offset = (start - self.first) as usize;
+        for (o, v) in out.iter_mut().zip(self.cache.range(offset..)) {
+            *o = *v;
+        }
+    }
+
+    /// Drops cached samples before grid index `index`.
+    pub fn forget_before(&mut self, index: i64) {
+        while self.first < index && self.cache.pop_front().is_some() {
+            self.first += 1;
         }
     }
 }
@@ -199,6 +272,33 @@ mod tests {
         let out = render_slice(&r, &x, 0.3, 1000);
         let peak = out.iter().fold(0.0f64, |m, v| m.max(v.abs()));
         assert!(peak < 1e-3, "alias peak {peak}");
+    }
+
+    #[test]
+    fn grid_reads_do_not_depend_on_how_they_are_split() {
+        let x = sine(440.0, 44_100.0, 44_100);
+        let src = |i: i64| {
+            usize::try_from(i)
+                .ok()
+                .and_then(|i| x.get(i))
+                .copied()
+                .unwrap_or(0.0)
+        };
+        let mut whole = vec![0.0; 600];
+        GridResampler::new(44_100.0, 11_000.0).read(src, -50, &mut whole);
+        let mut g = GridResampler::new(44_100.0, 11_000.0);
+        let mut pieces = Vec::new();
+        for start in (-50..550).step_by(37) {
+            let mut out = vec![0.0; 80];
+            g.read(src, start, &mut out);
+            pieces.push((start, out));
+            g.forget_before(start);
+        }
+        for (start, out) in pieces {
+            let lo = (start + 50) as usize;
+            let n = out.len().min(600 - lo);
+            assert_eq!(out[..n], whole[lo..lo + n], "start {start}");
+        }
     }
 
     #[test]

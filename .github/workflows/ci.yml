@@ -80,13 +80,19 @@ jobs:
       - run: cargo build -p newvoice-core --release --locked --target wasm32-unknown-unknown
 
   harness:
-    name: Harness (tests, lint, norms check)
+    name: Harness (Praat golden tests, lint, norms check)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: harness
     steps:
       - uses: actions/checkout@v5
+      # The golden tests build newvoice-cli from core/ (toolchain from
+      # core/rust-toolchain.toml).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: harness
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - run: uv run ruff check .

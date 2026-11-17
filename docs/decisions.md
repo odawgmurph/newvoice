@@ -64,3 +64,23 @@ CI (`.github/workflows/ci.yml`) runs on every push and PR:
 - App typecheck
 
 macOS runners are free while the repo is public.
+
+## D8 · Analysis core design (Stage 1)
+
+Choices made while building `newvoice-core`. The evidence for each is in [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md).
+
+- **No runtime dependencies.** The core is plain Rust (DSP, LPC, root finding and resampling written in-crate), so the licence review stays trivial and the same code builds for iOS, Android and WebAssembly.
+- **Fixed internal rates.** Pitch runs at 16 kHz and formants at 2 × the ceiling, as in Praat. Input at any capture rate is resampled by windowed-sinc interpolation onto a fixed output grid, and the grid samples are cached so overlapping frames share work.
+- **One frame grid for batch and live.** Frame *k* is centred at *k* × 10 ms. `StreamAnalyser` and `analyse` run the same per-frame code on the same samples, and a test checks that they produce identical frames for any chunk size.
+- **Live latency.** Frames are emitted 50 ms after their window closes (about 78 ms after their centre), so the octave-jump guard can confirm a 50 ms run before showing it. Analysis cost is about 4% of the 10 ms hop on x86. The Stage 2 ARM measurement uses `newvoice-cli bench`.
+- **Pitch.** YIN is the default and MPM the alternative; both are within 1% of Praat on the corpus. YIN compares a span centred in the frame for every lag, because the textbook form skews glides by about 0.6%. Semitones use the MIDI scale (A4 = 69), so a reading is also a note number.
+- **Formants.** These follow Praat's Burg method exactly, plus one deliberate difference: poles wider than 1000 Hz are dropped before numbering F1, F2 and so on. Those poles model spectral tilt rather than resonances, and in Praat's raw output they often take the F2 slot. The harness compares against Praat with the same filter (worst difference ≤ 1.1%). **Revisit the 1000 Hz value once real recordings are in the corpus.**
+- **Ceiling sweep.** For sustained vowels, 4500–6500 Hz in 250 Hz steps. The score is Fast Track's track smoothness plus how much F1–F3 move when the ceiling steps to its neighbours, both in Hz. Smoothness alone cannot choose between ceilings on a steady vowel. The ceiling chosen on the baseline vowels becomes the user's live ceiling.
+- **Formant confidence is provisional.** A hand-set function of F0 and the F1/F2 bandwidths, until it can be fitted to measured error.
+
+## D9 · Validation tooling
+
+- `core/newvoice-cli` runs the core on WAV files and prints JSON. It is test tooling and is never shipped, so it may use crates (hound, serde_json) that the core does not.
+- The harness uses Parselmouth (GPL), NumPy and SciPy as **dev** dependencies only (D5).
+- The CI gates are F0 within ±1% of Praat and of ground truth, and F1–F3 within ±5% of Praat at the same ceiling. Accuracy against the known formants of the synthetic vowels is gated as well, with a looser F1 limit from 200 Hz F0 up, where LPC is known to snap to harmonics.
+- `uv run python -m validation.report` regenerates `docs/validation/stage1-synthetic.md`. Rerun it, and commit the result, with any change to the analysis.

@@ -20,7 +20,7 @@
 use std::f64::consts::PI;
 
 use crate::lpc::{burg, inverse_filter_polynomial};
-use crate::resample::Resampler;
+use crate::resample::GridResampler;
 use crate::roots::roots;
 
 /// Most formants kept per frame.
@@ -145,7 +145,7 @@ pub fn frame_formants(
 pub struct FormantAnalyser {
     cfg: FormantConfig,
     rate: f64,
-    resampler: Resampler,
+    grid: GridResampler,
     window: Vec<f64>,
     buf: Vec<f64>,
     frame: Vec<f64>,
@@ -168,7 +168,7 @@ impl FormantAnalyser {
             })
             .collect();
         Self {
-            resampler: Resampler::new(in_rate, rate),
+            grid: GridResampler::new(in_rate, rate),
             rate,
             window,
             buf: Vec::with_capacity(n + 1),
@@ -183,8 +183,9 @@ impl FormantAnalyser {
 
     /// Seconds of input read on each side of a frame centre.
     pub fn reach_s(&self) -> f64 {
-        (self.window.len() as f64 / 2.0 + 1.0) / self.rate
-            + self.resampler.half_width_samples() as f64 / self.resampler.in_rate()
+        let rs = self.grid.resampler();
+        (self.window.len() as f64 / 2.0 + 2.0) / self.rate
+            + rs.half_width_samples() as f64 / rs.in_rate()
     }
 
     /// Formants of the frame centred at `t` seconds. `src(i)` returns input
@@ -192,10 +193,13 @@ impl FormantAnalyser {
     pub fn analyse(&mut self, src: impl Fn(i64) -> f32, t: f64) -> FormantFrame {
         let n = self.window.len();
         // One extra sample before the window for pre-emphasis.
-        let t0 = t - (n as f64 - 1.0) / (2.0 * self.rate) - 1.0 / self.rate;
+        // Window centred on the grid sample nearest `t`, plus one sample
+        // before it for pre-emphasis.
+        let start = (t * self.rate - (n as f64 - 1.0) / 2.0).round() as i64 - 1;
         self.buf.clear();
         self.buf.resize(n + 1, 0.0);
-        self.resampler.render(src, t0, &mut self.buf);
+        self.grid.read(src, start, &mut self.buf);
+        self.grid.forget_before(start);
         let alpha = (-2.0 * PI * self.cfg.pre_emphasis_hz / self.rate).exp();
         self.frame.clear();
         self.frame.extend(

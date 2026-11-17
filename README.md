@@ -4,13 +4,13 @@ An offline voice-training app for transfeminine and nonbinary voice goals, built
 
 NewVoice is an education app. It is not therapy and does not diagnose or treat anything.
 
-**Status:** Stage 0 (foundations). See [`docs/build-plan.md`](docs/build-plan.md).
+**Status:** Stage 1 (analysis core) in progress: pitch, formants and vocal tract length are built and validated against Praat ([report](docs/validation/stage1-synthetic.md)); voice-quality measures are next. See [`docs/build-plan.md`](docs/build-plan.md).
 
 ## Repository
 
 | Path | What |
 |---|---|
-| [`core/`](core/) | Rust analysis core (`newvoice-core`) and native bindings (`newvoice-ffi`, UniFFI) |
+| [`core/`](core/) | Rust analysis core (`newvoice-core`), native bindings (`newvoice-ffi`, UniFFI) and a test CLI (`newvoice-cli`) |
 | [`app/`](app/) | React Native app (Expo, development build) |
 | [`harness/`](harness/) | Python validation harness and reference-norms tooling (test-only, never shipped) |
 | [`content/`](content/) | Curriculum JSON and reference norms |
@@ -24,11 +24,19 @@ Rust (the toolchain is pinned by `core/rust-toolchain.toml`):
 cd core && cargo test --workspace
 ```
 
-Harness and reference norms:
+Harness, including the Praat golden tests (needs the Rust toolchain; builds `newvoice-cli`):
 
 ```bash
 cd harness && uv sync && uv run pytest
 ```
+
+Validation report (after any analysis change):
+
+```bash
+cd harness && uv run python -m validation.report
+```
+
+Reference norms:
 
 ```bash
 cd harness && uv run python -m norms.build_norms

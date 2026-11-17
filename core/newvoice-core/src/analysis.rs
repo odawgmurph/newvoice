@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use crate::formant::{FormantAnalyser, FormantConfig, FormantFrame};
 use crate::pitch::smooth::{SmoothConfig, smooth, smooth_window};
 use crate::pitch::{LagRange, PITCH_RATE, PitchAlgorithm, mpm, yin};
-use crate::resample::Resampler;
+use crate::resample::GridResampler;
 use crate::units::PitchStats;
 
 /// Analysis settings. Defaults follow handbook §3.1–3.3.
@@ -180,6 +180,11 @@ impl StreamAnalyser {
         }
     }
 
+    /// True once [`finish`](Self::finish) has been called.
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+
     /// Delay from a frame's centre time until it can be emitted, ignoring
     /// buffering outside the analyser.
     pub fn latency_s(&self) -> f64 {
@@ -344,7 +349,7 @@ pub(crate) fn formant_confidence(
 struct FrameAnalyser {
     cfg: Config,
     lags: LagRange,
-    resampler: Resampler,
+    resampler: GridResampler,
     buf: Vec<f64>,
     scratch: Vec<f64>,
     formants: Option<FormantAnalyser>,
@@ -356,7 +361,7 @@ impl FrameAnalyser {
         Self {
             cfg: cfg.clone(),
             lags: LagRange::new(cfg.f0_min_hz, cfg.f0_max_hz),
-            resampler: Resampler::new(sample_rate, PITCH_RATE),
+            resampler: GridResampler::new(sample_rate, PITCH_RATE),
             buf: Vec::new(),
             scratch: Vec::new(),
             formants: cfg
@@ -368,8 +373,9 @@ impl FrameAnalyser {
 
     /// Seconds of input read on each side of a frame centre.
     fn reach_s(&self) -> f64 {
-        let pitch = (self.lags.frame_len() as f64 / 2.0 + 1.0) / PITCH_RATE
-            + self.resampler.half_width_samples() as f64 / self.resampler.in_rate();
+        let rs = self.resampler.resampler();
+        let pitch = (self.lags.frame_len() as f64 / 2.0 + 2.0) / PITCH_RATE
+            + rs.half_width_samples() as f64 / rs.in_rate();
         self.formants
             .as_ref()
             .map_or(pitch, |f| pitch.max(f.reach_s()))
@@ -380,8 +386,10 @@ impl FrameAnalyser {
         let n = self.lags.frame_len();
         self.buf.clear();
         self.buf.resize(n, 0.0);
-        let t0 = t - (n as f64 - 1.0) / (2.0 * PITCH_RATE);
-        self.resampler.render(src, t0, &mut self.buf);
+        // Frame centred on the grid sample nearest `t`.
+        let start = (t * PITCH_RATE - (n as f64 - 1.0) / 2.0).round() as i64;
+        self.resampler.read(src, start, &mut self.buf);
+        self.resampler.forget_before(start);
 
         let mean_square = self.buf.iter().map(|v| v * v).sum::<f64>() / n as f64;
         let level_dbfs = 10.0 * (2.0 * mean_square).max(1e-15).log10();
