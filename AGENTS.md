@@ -1,0 +1,1 @@
+- When making changes, update the docs: decisions.md with pending/made decisions, and build-plan.md with completed iterations on the build plan.
