@@ -12,6 +12,7 @@ use std::collections::VecDeque;
 use crate::formant::{FormantAnalyser, FormantConfig, FormantFrame};
 use crate::pitch::smooth::{SmoothConfig, smooth, smooth_window};
 use crate::pitch::{LagRange, PITCH_RATE, PitchAlgorithm, mpm, yin};
+use crate::quality::spectral::{FrameSpectral, SpectralAnalyser};
 use crate::resample::GridResampler;
 use crate::units::PitchStats;
 
@@ -84,6 +85,9 @@ pub struct Frame {
     /// How far to trust F1/F2 here, 0–1. **Provisional heuristic**, to be
     /// calibrated against the harness's error-vs-F0 measurements.
     pub formant_confidence: f64,
+    /// Spectral voice-quality measures (H1–H2, alpha ratio, …), on frames
+    /// with an F0 (`f0_hz` is `Some`) only.
+    pub spectral: Option<FrameSpectral>,
 }
 
 /// Frame-level analysis of a finished recording.
@@ -300,6 +304,7 @@ struct RawFrame {
     voiced: bool,
     f0_hz: Option<f64>,
     formants: Option<FormantFrame>,
+    spectral: Option<FrameSpectral>,
 }
 
 impl RawFrame {
@@ -320,6 +325,7 @@ impl RawFrame {
                     fr.get(1).map(|f| f.bandwidth_hz),
                 )
             }),
+            spectral: self.spectral.filter(|_| f0_hz.is_some()),
         }
     }
 }
@@ -353,6 +359,7 @@ struct FrameAnalyser {
     buf: Vec<f64>,
     scratch: Vec<f64>,
     formants: Option<FormantAnalyser>,
+    spectral: SpectralAnalyser,
 }
 
 impl FrameAnalyser {
@@ -364,6 +371,10 @@ impl FrameAnalyser {
             resampler: GridResampler::new(sample_rate, PITCH_RATE),
             buf: Vec::new(),
             scratch: Vec::new(),
+            spectral: SpectralAnalyser::new(
+                LagRange::new(cfg.f0_min_hz, cfg.f0_max_hz).frame_len(),
+                PITCH_RATE,
+            ),
             formants: cfg
                 .formants
                 .clone()
@@ -417,14 +428,20 @@ impl FrameAnalyser {
                 FormantFrame::default()
             }
         });
+        let f0_hz = estimate.filter(|_| voiced).map(|e| e.f0_hz);
+        let spectral = f0_hz.map(|f0| {
+            self.spectral
+                .analyse(&self.buf, f0, formants.as_ref().filter(|f| f.len() >= 2))
+        });
         RawFrame {
             index,
             time_s: t,
             level_dbfs,
             periodicity,
             voiced,
-            f0_hz: estimate.filter(|_| voiced).map(|e| e.f0_hz),
+            f0_hz,
             formants,
+            spectral,
         }
     }
 }

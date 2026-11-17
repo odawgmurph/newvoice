@@ -54,3 +54,40 @@ def formants_at(
                 found.append(f)
         out[i, : min(n, len(found))] = found[:n]
     return out
+
+
+def cpps(case) -> float:
+    """Praat CPPS with its default settings (To PowerCepstrogram, Get CPPS)."""
+    pc = parselmouth.praat.call(sound(case), "To PowerCepstrogram", 60, 0.002, 5000, 50)
+    return parselmouth.praat.call(
+        pc,
+        "Get CPPS",
+        False,
+        0.02,
+        0.0005,
+        60,
+        330,
+        0.05,
+        "Parabolic",
+        0.001,
+        0.05,
+        "Straight",
+        "Robust",
+    )
+
+
+def hnr(case) -> float:
+    """Praat mean HNR from To Harmonicity (ac) with its defaults."""
+    h = sound(case).to_harmonicity_ac(
+        time_step=0.01, minimum_pitch=75, silence_threshold=0.1, periods_per_window=4.5
+    )
+    return parselmouth.praat.call(h, "Get mean", 0, 0)
+
+
+def jitter_shimmer(case) -> tuple[float, float]:
+    """Praat local jitter and shimmer (fractions) with its default limits."""
+    s = sound(case)
+    pp = parselmouth.praat.call(s, "To PointProcess (periodic, cc)", F0_MIN_HZ, F0_MAX_HZ)
+    jitter = parselmouth.praat.call(pp, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+    shimmer = parselmouth.praat.call([s, pp], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+    return jitter, shimmer

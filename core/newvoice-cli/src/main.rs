@@ -5,6 +5,9 @@
 //! ```text
 //! newvoice-cli frames <wav> [--algorithm yin|mpm] [--ceiling HZ] [--raw-formants] [--no-formants]
 //! newvoice-cli vowel  <wav> [--ceiling HZ]...
+//! newvoice-cli quality <wav> [--algorithm yin|mpm] [--ceiling HZ]
+//! newvoice-cli hnr    <wav>   (per-frame HNR track)
+//! newvoice-cli cpps   <wav>   (per-frame cepstral peak prominence)
 //! newvoice-cli bench  <wav> [--chunk N] [--repeat N]
 //! ```
 
@@ -13,6 +16,10 @@ use std::time::Instant;
 
 use newvoice_core::formant::FormantConfig;
 use newvoice_core::pitch::PitchAlgorithm;
+use newvoice_core::quality::cpps::cpps_track;
+use newvoice_core::quality::hnr::hnr_track;
+use newvoice_core::quality::spectral::FrameSpectral;
+use newvoice_core::quality::{QUALITY_VERSION, QualityConfig, quality_with_tracks};
 use newvoice_core::{Config, StreamAnalyser, VowelConfig, analyse, measure_vowel};
 use serde_json::{Value, json};
 
@@ -37,12 +44,21 @@ fn run(args: &[String]) -> Result<Value, String> {
     match cmd.as_str() {
         "frames" => Ok(frames(&samples, rate, &opts)),
         "vowel" => Ok(vowel(&samples, rate, &opts)),
+        "quality" => Ok(quality(&samples, rate, &opts)),
+        "hnr" => {
+            let t = hnr_track(&samples, rate, &Default::default());
+            Ok(json!({"times_s": t.times_s, "hnr_db": t.hnr_db}))
+        }
+        "cpps" => {
+            let t = cpps_track(&samples, rate, &Default::default());
+            Ok(json!({"times_s": t.times_s, "prominence_db": t.prominence_db}))
+        }
         "bench" => Ok(bench(&samples, rate, &opts)),
         _ => Err(USAGE.into()),
     }
 }
 
-const USAGE: &str = "usage: newvoice-cli <frames|vowel|bench> <wav> [options]";
+const USAGE: &str = "usage: newvoice-cli <frames|vowel|quality|hnr|cpps|bench> <wav> [options]";
 
 #[derive(Default)]
 struct Options {
@@ -168,6 +184,7 @@ fn frames(samples: &[f32], rate: f64, opts: &Options) -> Value {
                         .collect::<Vec<_>>()
                 }),
                 "formant_confidence": f.formant_confidence,
+                "spectral": f.spectral.as_ref().map(spectral_json),
             })
         })
         .collect();
@@ -249,5 +266,49 @@ fn bench(samples: &[f32], rate: f64, opts: &Options) -> Value {
         "us_per_frame": 1e6 * best / frames.max(1) as f64,
         "hop_us": 1e6 * cfg.hop_s,
         "latency_s": latency_s,
+    })
+}
+
+fn spectral_json(s: &FrameSpectral) -> Value {
+    json!({
+        "h1_db": s.h1_db,
+        "h2_db": s.h2_db,
+        "h1_h2_db": s.h1_h2_db,
+        "h1c_h2c_db": opt(s.h1c_h2c_db),
+        "alpha_ratio_db": s.alpha_ratio_db,
+        "hammarberg_db": s.hammarberg_db,
+        "lh_ratio_db": s.lh_ratio_db,
+    })
+}
+
+/// Utterance-level voice quality, plus whole-signal CPPS and HNR means
+/// computed the way Praat reports them (for the golden comparisons).
+fn quality(samples: &[f32], rate: f64, opts: &Options) -> Value {
+    let cfg = QualityConfig {
+        analysis: opts.config(),
+        ..QualityConfig::default()
+    };
+    let analysis = analyse(samples, rate, &cfg.analysis);
+    let cpps = cpps_track(samples, rate, &cfg.cpps);
+    let hnr = hnr_track(samples, rate, &cfg.hnr);
+    let q = quality_with_tracks(&analysis, samples, &cfg, &cpps, &hnr);
+    json!({
+        "core_version": newvoice_core::VERSION,
+        "quality_version": QUALITY_VERSION,
+        "voiced_s": q.voiced_s,
+        "h1_h2_db": opt(q.h1_h2_db),
+        "h1c_h2c_db": opt(q.h1c_h2c_db),
+        "alpha_ratio_db": opt(q.alpha_ratio_db),
+        "hammarberg_db": opt(q.hammarberg_db),
+        "lh_ratio_db": opt(q.lh_ratio_db),
+        "cpps_db": opt(q.cpps_db),
+        "hnr_db": opt(q.hnr_db),
+        "jitter_local": opt(q.jitter_local),
+        "shimmer_local": opt(q.shimmer_local),
+        "periods": q.periods,
+        "praat_style": {
+            "cpps_db": opt(cpps.mean()),
+            "hnr_db": opt(hnr.mean()),
+        },
     })
 }

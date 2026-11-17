@@ -49,6 +49,8 @@ pub fn estimate(
         };
     }
 
+    // The textbook rule: the first dip below the threshold (descending to
+    // its bottom), else the deepest dip.
     let mut chosen = None;
     let mut tau = min;
     while tau <= max {
@@ -61,11 +63,25 @@ pub fn estimate(
         }
         tau += 1;
     }
-    let tau = chosen.unwrap_or_else(|| {
+    let mut tau = chosen.unwrap_or_else(|| {
         (min..=max)
             .min_by(|&a, &b| d[a].total_cmp(&d[b]))
             .expect("non-empty lag range")
     });
+
+    // Octave-up guard: if a dip near the double period is much more periodic,
+    // the first dip was the half period of a voice whose H2 dominates.
+    let near_double = (2 * tau * 9 / 10).max(min)..=(2 * tau * 11 / 10).min(max);
+    if let Some(double) = near_double
+        .filter(|&t| d[t] < d[t - 1] && d[t] <= d[t + 1])
+        .min_by(|&a, &b| d[a].total_cmp(&d[b]))
+        && super::octave_up_error(
+            super::nsdf_peak(&x[..lags.frame_len()], tau),
+            super::nsdf_peak(&x[..lags.frame_len()], double),
+        )
+    {
+        tau = double;
+    }
 
     // Refine the period on the raw difference function, which (unlike the
     // normalised one) has no lag-dependent weighting to bias the vertex.
@@ -101,6 +117,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn weak_fundamental_does_not_cause_an_octave_error() {
+        // H2 eight times stronger than H1 (as when H2 sits on F1).
+        let f0 = 231.0;
+        let x: Vec<f64> = (0..2000)
+            .map(|i| {
+                let t = i as f64 / PITCH_RATE;
+                let w = 2.0 * std::f64::consts::PI * f0 * t;
+                0.05 * w.sin() + 0.4 * (2.0 * w).sin() + 0.03 * (3.0 * w).sin()
+            })
+            .collect();
+        let e = run(&x).unwrap();
+        assert!((e.f0_hz / f0 - 1.0).abs() < 2e-3, "got {}", e.f0_hz);
     }
 
     #[test]

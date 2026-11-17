@@ -4,9 +4,12 @@
 //! Keep it free of platform and FFI code: bindings live in `newvoice-ffi`.
 
 pub mod analysis;
+pub mod fft;
 pub mod formant;
 pub mod lpc;
+pub mod numeric;
 pub mod pitch;
+pub mod quality;
 pub mod resample;
 pub mod roots;
 pub mod units;
@@ -14,6 +17,7 @@ pub mod vowel;
 pub mod vtl;
 
 pub use analysis::{Analysis, Config, Frame, StreamAnalyser, analyse};
+pub use quality::{QualityConfig, VoiceQuality, measure_quality};
 pub use vowel::{VowelConfig, VowelMeasurement, measure_vowel};
 
 #[cfg(test)]

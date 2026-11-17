@@ -103,3 +103,14 @@ def group_ceiling(case: Case) -> float:
 def relative_error(estimate, truth) -> np.ndarray:
     est = np.array([_nan(v) for v in estimate], dtype=float)
     return np.abs(est / np.asarray(truth, dtype=float) - 1)
+
+
+_QUALITY_CACHE: dict[str, dict] = {}
+
+
+def quality(case) -> dict:
+    """newvoice-core's utterance-level voice quality (cached per case name,
+    since several tests and the report read the same cases)."""
+    if case.name not in _QUALITY_CACHE:
+        _QUALITY_CACHE[case.name] = core.on_case(case, "quality")
+    return _QUALITY_CACHE[case.name]

@@ -61,7 +61,20 @@ pub fn estimate(
         }
     }
     let highest = peaks.iter().map(|&p| nsdf[p]).fold(f64::MIN, f64::max);
-    let &chosen = peaks.iter().find(|&&p| nsdf[p] >= k * highest)?;
+    let mut chosen = *peaks.iter().find(|&&p| nsdf[p] >= k * highest)?;
+
+    // Octave-up guard (see `super::octave_up_error`).
+    if let Some(&double) = peaks
+        .iter()
+        .filter(|&&p| p >= 2 * chosen * 9 / 10 && p <= 2 * chosen * 11 / 10)
+        .max_by(|&&a, &&b| nsdf[a].total_cmp(&nsdf[b]))
+        && super::octave_up_error(
+            parabolic(nsdf[chosen - 1], nsdf[chosen], nsdf[chosen + 1]).1,
+            parabolic(nsdf[double - 1], nsdf[double], nsdf[double + 1]).1,
+        )
+    {
+        chosen = double;
+    }
 
     let (delta, value) = parabolic(nsdf[chosen - 1], nsdf[chosen], nsdf[chosen + 1]);
     Some(PitchEstimate {
@@ -90,6 +103,20 @@ mod tests {
                 assert!(e.periodicity > 0.9, "f0={f0} clarity {}", e.periodicity);
             }
         }
+    }
+
+    #[test]
+    fn weak_fundamental_does_not_cause_an_octave_error() {
+        let f0 = 231.0;
+        let x: Vec<f64> = (0..2000)
+            .map(|i| {
+                let t = i as f64 / PITCH_RATE;
+                let w = 2.0 * std::f64::consts::PI * f0 * t;
+                0.05 * w.sin() + 0.4 * (2.0 * w).sin() + 0.03 * (3.0 * w).sin()
+            })
+            .collect();
+        let e = run(&x).unwrap();
+        assert!((e.f0_hz / f0 - 1.0).abs() < 2e-3, "got {}", e.f0_hz);
     }
 
     #[test]
