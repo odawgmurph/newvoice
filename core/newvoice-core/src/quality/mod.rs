@@ -127,6 +127,62 @@ pub fn quality_with_tracks(
     }
 }
 
+impl VoiceQuality {
+    /// This utterance's inputs to the [`weight::weight_index`].
+    pub fn weight_features(&self) -> weight::WeightFeatures {
+        weight::WeightFeatures {
+            h1c_h2c_db: self.h1c_h2c_db,
+            alpha_ratio_db: self.alpha_ratio_db,
+            cpps_db: self.cpps_db,
+        }
+    }
+}
+
+impl spectral::FrameSpectral {
+    /// This frame's inputs to the [`weight::weight_index`] (no CPPS live).
+    pub fn weight_features(&self) -> weight::WeightFeatures {
+        weight::WeightFeatures {
+            h1c_h2c_db: self.h1c_h2c_db,
+            alpha_ratio_db: Some(self.alpha_ratio_db),
+            cpps_db: None,
+        }
+    }
+}
+
+/// The weight-index baseline of an utterance: the mean and spread of each
+/// feature over its voiced frames (CPPS over CPPS frames centred in voiced
+/// frames). Store it with the user's baseline recording.
+pub fn weight_baseline(analysis: &Analysis, cpps: &CppsTrack) -> weight::WeightBaseline {
+    let spectral: Vec<_> = analysis
+        .frames
+        .iter()
+        .filter(|f| f.f0_hz.is_some())
+        .filter_map(|f| f.spectral)
+        .collect();
+    let h1c: Vec<f64> = spectral.iter().filter_map(|s| s.h1c_h2c_db).collect();
+    let alpha: Vec<f64> = spectral.iter().map(|s| s.alpha_ratio_db).collect();
+    let hop = analysis.hop_s;
+    let cpps_voiced: Vec<f64> = cpps
+        .times_s
+        .iter()
+        .zip(&cpps.prominence_db)
+        .filter(|(t, _)| {
+            let k = (*t / hop).round();
+            k >= 0.0
+                && analysis
+                    .frames
+                    .get(k as usize)
+                    .is_some_and(|f| f.f0_hz.is_some())
+        })
+        .map(|(_, p)| *p)
+        .collect();
+    weight::WeightBaseline {
+        h1c_h2c_db: weight::FeatureStats::of(&h1c),
+        alpha_ratio_db: weight::FeatureStats::of(&alpha),
+        cpps_db: weight::FeatureStats::of(&cpps_voiced),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +237,14 @@ mod tests {
         assert!(b.hnr_db.unwrap() < m.hnr_db.unwrap() - 5.0, "{m:?} {b:?}");
         assert!(m.periods > 150, "{m:?}");
         assert!(m.jitter_local.unwrap() < 0.005, "{m:?}");
+
+        // Against a modal baseline, the breathy voice scores lighter.
+        let x = to_f32(&modal);
+        let analysis = analyse(&x, rate, &cfg.analysis);
+        let baseline = weight_baseline(&analysis, &cpps_track(&x, rate, &cfg.cpps));
+        let w = weight::weight_index(&b.weight_features(), &baseline).unwrap();
+        assert!(w < -1.0, "weight {w}");
+        let own = weight::weight_index(&m.weight_features(), &baseline).unwrap();
+        assert!(own.abs() < 0.5, "own weight {own}");
     }
 }

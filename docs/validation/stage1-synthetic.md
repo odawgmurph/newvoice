@@ -39,6 +39,21 @@ Relative F0 error (%) on frames at least 50 ms inside the voiced part. Praat is 
 | `vowel-women-ae-200Hz-16000` | 0.02 | 0.05 | 0.08 | 0.02 | 0.05 | 0.08 |
 | `vowel-women-ae-200Hz-48000` | 0.02 | 0.04 | 0.07 | 0.02 | 0.05 | 0.09 |
 
+### Octave traps
+
+Signals that provoke octave errors: a weak fundamental with H2 on F1 (H1 18 dB below H2), which made both estimators read an octave high until the octave-up guard was added, and per-cycle jitter, which can produce sub-harmonics. Share (%) of inner frames that are voiced, and of voiced frames within 5% of the true F0. The gate is 95% voiced and 99% within 5%.
+
+| Signal | YIN voiced | YIN within 5% | MPM voiced | MPM within 5% | Praat within 5% |
+|---|---|---|---|---|---|
+| `weak-h1-women-uw-231Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `weak-h1-men-iy-150Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `jitter0.5-110Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `jitter1-110Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `jitter0.5-200Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `jitter1-200Hz` | 98.9 | 100.0 | 98.9 | 100.0 | 100.0 |
+| `jitter0.5-300Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+| `jitter1-300Hz` | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
+
 ## Formants
 
 ### Same algorithm as Praat
@@ -82,13 +97,67 @@ Relative error (%) of aVTL (from ΔF over F1–F4) against the value implied by 
 | /u/ | 1.1 | 3.1 | 14 |
 | /ɝ/ | 1.9 | 58.7 | 14 |
 
+## Voice quality
+
+### Spectral measures
+
+Worst absolute error (dB) over source H1−H2 of −3, +3 and +9 dB and source tilts of 1/k and 1/k^1.6, against values computed exactly from each vowel's harmonic amplitudes after the resonators. H1*−H2* is compared with the source's H1−H2. Gates: alpha 0.5 dB, Hammarberg and L/H 1 dB, H1*−H2* 1 dB away from F1.
+
+| Vowel | Alpha ratio | Hammarberg | L/H ratio | H1*−H2* |
+|---|---|---|---|---|
+| `vq-men-ah-120Hz` | 0.01 | 0.17 | 0.26 | 0.08 |
+| `vq-men-iy-150Hz` (H1 or H2 near F1) | 0.09 | 0.35 | 0.57 | 4.23 |
+| `vq-women-ae-188Hz` | 0.01 | 0.36 | 0.15 | 0.23 |
+| `vq-women-uw-231Hz` (H1 or H2 near F1) | 0.11 | 0.34 | 0.86 | 4.34 |
+
+Uncorrected H1−H2 moves one-for-one with the source within a vowel (gate 0.3 dB), which is what baseline-relative scores rely on.
+
+
+### CPPS and HNR
+
+Whole-signal means against Praat 6.1 (`To PowerCepstrogram` + `Get CPPS` with default settings; `To Harmonicity (ac)`), on vowels with white noise added at 40, 25, 15 and 8 dB SNR. Gates: CPPS 0.75 dB, HNR 0.5 dB.
+
+| Signal | CPPS ours | CPPS Praat | Δ | HNR ours | HNR Praat | Δ |
+|---|---|---|---|---|---|---|
+| `vq-men-ah-120Hz-h1h2+3-tilt1-snr40` | 24.28 | 24.22 | +0.06 | 40.94 | 40.94 | -0.00 |
+| `vq-men-ah-120Hz-h1h2+3-tilt1-snr25` | 21.12 | 21.08 | +0.04 | 25.04 | 25.04 | -0.00 |
+| `vq-men-ah-120Hz-h1h2+3-tilt1-snr15` | 18.25 | 18.22 | +0.03 | 15.02 | 15.02 | -0.00 |
+| `vq-men-ah-120Hz-h1h2+3-tilt1-snr8` | 15.94 | 15.91 | +0.03 | 8.05 | 8.07 | -0.02 |
+| `vq-men-iy-150Hz-h1h2+3-tilt1-snr40` | 24.90 | 24.37 | +0.53 | 42.07 | 42.07 | -0.00 |
+| `vq-men-iy-150Hz-h1h2+3-tilt1-snr25` | 19.65 | 19.15 | +0.50 | 25.50 | 25.50 | -0.00 |
+| `vq-men-iy-150Hz-h1h2+3-tilt1-snr15` | 15.04 | 14.72 | +0.32 | 15.20 | 15.19 | +0.00 |
+| `vq-men-iy-150Hz-h1h2+3-tilt1-snr8` | 11.47 | 11.21 | +0.27 | 8.22 | 8.22 | -0.01 |
+| `vq-women-ae-188Hz-h1h2+3-tilt1-snr40` | 26.88 | 26.51 | +0.37 | 41.99 | 41.99 | -0.00 |
+| `vq-women-ae-188Hz-h1h2+3-tilt1-snr25` | 22.11 | 22.03 | +0.09 | 25.27 | 25.27 | -0.00 |
+| `vq-women-ae-188Hz-h1h2+3-tilt1-snr15` | 18.23 | 18.08 | +0.15 | 15.11 | 15.11 | +0.00 |
+| `vq-women-ae-188Hz-h1h2+3-tilt1-snr8` | 15.06 | 14.89 | +0.16 | 8.14 | 8.14 | +0.00 |
+| `vq-women-uw-231Hz-h1h2+3-tilt1-snr40` | 20.36 | 20.34 | +0.03 | 43.22 | 43.22 | -0.00 |
+| `vq-women-uw-231Hz-h1h2+3-tilt1-snr25` | 16.08 | 16.04 | +0.04 | 25.41 | 25.41 | -0.00 |
+| `vq-women-uw-231Hz-h1h2+3-tilt1-snr15` | 12.71 | 12.62 | +0.09 | 15.22 | 15.22 | -0.00 |
+| `vq-women-uw-231Hz-h1h2+3-tilt1-snr8` | 9.89 | 9.78 | +0.11 | 8.26 | 8.30 | -0.04 |
+
+### Jitter and shimmer
+
+Local jitter and shimmer (%) of sources with known per-cycle period and amplitude perturbation, filtered by /ɑ/ resonators. "Source" is the perturbation put in; the resonators ring across cycle boundaries and smooth some of it away, so both analysers read jitter about 15% low. The gate is agreement with Praat: 10% (+0.03 pp) for jitter, 15% (+0.2 pp) for shimmer.
+
+| Signal | Jitter source | ours | Praat | Shimmer source | ours | Praat | Periods |
+|---|---|---|---|---|---|---|---|
+| `perturb-110Hz-j0-s0` | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.03 | 107 |
+| `perturb-110Hz-j0.5-s2` | 0.50 | 0.42 | 0.42 | 1.95 | 1.77 | 1.82 | 107 |
+| `perturb-110Hz-j1-s4` | 1.02 | 0.85 | 0.88 | 3.87 | 4.14 | 4.19 | 106 |
+| `perturb-110Hz-j2-s8` | 1.92 | 1.67 | 1.65 | 8.17 | 8.49 | 8.69 | 106 |
+| `perturb-200Hz-j0-s0` | 0.00 | 0.00 | 0.01 | 0.00 | 0.02 | 0.02 | 198 |
+| `perturb-200Hz-j0.5-s2` | 0.45 | 0.38 | 0.39 | 2.03 | 2.78 | 2.66 | 197 |
+| `perturb-200Hz-j1-s4` | 0.90 | 0.77 | 0.77 | 4.21 | 5.55 | 5.25 | 198 |
+| `perturb-200Hz-j2-s8` | 2.13 | 1.80 | 1.79 | 7.58 | 11.51 | 10.54 | 198 |
+
 ## Real-time cost
 
-Streaming analysis (pitch plus formants at one ceiling) of 3 s at 48 kHz in 10 ms chunks, best of 5 runs, on the machine that generated this report (x86_64). The low-end ARM measurement is a Stage 2 task.
+Streaming analysis (pitch, formants at one ceiling and the per-frame spectral measures) of 3 s at 48 kHz in 10 ms chunks, best of 5 runs, on the machine that generated this report (x86_64). The low-end ARM measurement is a Stage 2 task.
 
 | Per frame | Hop | Share of hop | Latency |
 |---|---|---|---|
-| 368 µs | 10 ms | 3.7% | 78 ms |
+| 531 µs | 10 ms | 5.3% | 78 ms |
 
 ## Known limitations
 
@@ -105,3 +174,15 @@ Streaming analysis (pitch plus formants at one ceiling) of 3 s at 48 kHz in 10 m
   Confidence is already low there.
 - **Formant confidence is provisional.** It is a hand-set heuristic, to be
   fitted to these error measurements and to real recordings.
+- **H1*−H2* near F1.** When H1 or H2 sits on F1 (for example /i/ or /u/ at
+  higher F0), the Iseli–Alwan correction can be several dB off. Within one
+  vowel, changes are still tracked; compare a user only with their own
+  baseline on the same vowel.
+- **CPPS on perfectly clean signals** reads about 1.5 dB above Praat: the
+  noiseless gaps between harmonics make the log spectrum depend on resampler
+  details. Every real recording has a noise floor, where the two agree.
+- **Pitch on strongly jittered voices.** Beyond about 2% jitter at higher F0,
+  YIN (the default) gives sub-harmonic frames that the jump guard then
+  drops; MPM degrades less. Healthy voices are well below this.
+- **The weight index is unvalidated.** It is a baseline-relative heuristic
+  (handbook §3.4) until the Stage 10 listener study.

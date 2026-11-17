@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use newvoice_core as core;
 use newvoice_core::formant::FormantConfig;
+use newvoice_core::quality::{self as vq, QualityConfig};
 use newvoice_core::units::hz_to_st;
 
 uniffi::setup_scaffolding!();
@@ -127,6 +128,36 @@ pub struct FrameResult {
     pub formants: Vec<Formant>,
     /// Provisional 0-1 trust in F1/F2; hide formant readouts when low.
     pub formant_confidence: f64,
+    /// Spectral voice-quality measures, on frames with an F0 only.
+    pub spectral: Option<FrameSpectral>,
+}
+
+/// Per-frame spectral voice-quality measures (dB).
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct FrameSpectral {
+    pub h1_db: f64,
+    pub h2_db: f64,
+    /// Higher = breathier / lighter.
+    pub h1_h2_db: f64,
+    /// H1 − H2 corrected for F1 and F2; `None` without both formants.
+    pub h1c_h2c_db: Option<f64>,
+    pub alpha_ratio_db: f64,
+    pub hammarberg_db: f64,
+    pub lh_ratio_db: f64,
+}
+
+impl From<&vq::spectral::FrameSpectral> for FrameSpectral {
+    fn from(s: &vq::spectral::FrameSpectral) -> Self {
+        Self {
+            h1_db: s.h1_db,
+            h2_db: s.h2_db,
+            h1_h2_db: s.h1_h2_db,
+            h1c_h2c_db: s.h1c_h2c_db,
+            alpha_ratio_db: s.alpha_ratio_db,
+            hammarberg_db: s.hammarberg_db,
+            lh_ratio_db: s.lh_ratio_db,
+        }
+    }
 }
 
 impl From<&core::Frame> for FrameResult {
@@ -151,6 +182,7 @@ impl From<&core::Frame> for FrameResult {
                 })
                 .unwrap_or_default(),
             formant_confidence: f.formant_confidence,
+            spectral: f.spectral.as_ref().map(FrameSpectral::from),
         }
     }
 }
@@ -246,6 +278,134 @@ pub fn measure_sustained_vowel(
         avtl_cm: m.avtl_cm,
         confidence: m.confidence,
     }))
+}
+
+/// Mean and standard deviation of one feature.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct FeatureStats {
+    pub mean: f64,
+    pub sd: f64,
+}
+
+/// A user's weight-index baseline; store it with their baseline recording.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct WeightBaseline {
+    pub h1c_h2c_db: Option<FeatureStats>,
+    pub alpha_ratio_db: Option<FeatureStats>,
+    pub cpps_db: Option<FeatureStats>,
+}
+
+/// The features a weight index is computed from.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct WeightFeatures {
+    pub h1c_h2c_db: Option<f64>,
+    pub alpha_ratio_db: Option<f64>,
+    pub cpps_db: Option<f64>,
+}
+
+fn stats_in(s: Option<FeatureStats>) -> Option<vq::weight::FeatureStats> {
+    s.map(|s| vq::weight::FeatureStats {
+        mean: s.mean,
+        sd: s.sd,
+    })
+}
+
+fn stats_out(s: Option<vq::weight::FeatureStats>) -> Option<FeatureStats> {
+    s.map(|s| FeatureStats {
+        mean: s.mean,
+        sd: s.sd,
+    })
+}
+
+/// Utterance voice quality (handbook §3.4).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct VoiceQualityResult {
+    pub core_version: String,
+    /// Stored values are only comparable within one version.
+    pub quality_version: u32,
+    pub weight_index_version: u32,
+    pub voiced_s: f64,
+    pub h1_h2_db: Option<f64>,
+    pub h1c_h2c_db: Option<f64>,
+    pub alpha_ratio_db: Option<f64>,
+    pub hammarberg_db: Option<f64>,
+    pub lh_ratio_db: Option<f64>,
+    pub cpps_db: Option<f64>,
+    pub hnr_db: Option<f64>,
+    /// Fractions (0.01 = 1%).
+    pub jitter_local: Option<f64>,
+    pub shimmer_local: Option<f64>,
+    pub periods: u32,
+    /// This utterance's features for `weight_index`.
+    pub weight_features: WeightFeatures,
+    /// This utterance as a weight baseline (use for the baseline recording).
+    pub weight_baseline: WeightBaseline,
+}
+
+/// Measures the voice quality of a finished mono utterance.
+#[uniffi::export]
+pub fn measure_voice_quality(
+    samples: Vec<f32>,
+    sample_rate: u32,
+    settings: AnalysisSettings,
+) -> Result<VoiceQualityResult, AnalysisError> {
+    let cfg = QualityConfig {
+        analysis: config(sample_rate, &settings)?,
+        ..QualityConfig::default()
+    };
+    let rate = f64::from(sample_rate);
+    let analysis = core::analyse(&samples, rate, &cfg.analysis);
+    let cpps = vq::cpps::cpps_track(&samples, rate, &cfg.cpps);
+    let hnr = vq::hnr::hnr_track(&samples, rate, &cfg.hnr);
+    let q = vq::quality_with_tracks(&analysis, &samples, &cfg, &cpps, &hnr);
+    let baseline = vq::weight_baseline(&analysis, &cpps);
+    let features = q.weight_features();
+    Ok(VoiceQualityResult {
+        core_version: core::VERSION.to_owned(),
+        quality_version: vq::QUALITY_VERSION,
+        weight_index_version: vq::weight::WEIGHT_INDEX_VERSION,
+        voiced_s: q.voiced_s,
+        h1_h2_db: q.h1_h2_db,
+        h1c_h2c_db: q.h1c_h2c_db,
+        alpha_ratio_db: q.alpha_ratio_db,
+        hammarberg_db: q.hammarberg_db,
+        lh_ratio_db: q.lh_ratio_db,
+        cpps_db: q.cpps_db,
+        hnr_db: q.hnr_db,
+        jitter_local: q.jitter_local,
+        shimmer_local: q.shimmer_local,
+        periods: u32::try_from(q.periods).unwrap_or(u32::MAX),
+        weight_features: WeightFeatures {
+            h1c_h2c_db: features.h1c_h2c_db,
+            alpha_ratio_db: features.alpha_ratio_db,
+            cpps_db: features.cpps_db,
+        },
+        weight_baseline: WeightBaseline {
+            h1c_h2c_db: stats_out(baseline.h1c_h2c_db),
+            alpha_ratio_db: stats_out(baseline.alpha_ratio_db),
+            cpps_db: stats_out(baseline.cpps_db),
+        },
+    })
+}
+
+/// The heuristic weight index (handbook §3.4): positive = heavier than the
+/// baseline, negative = lighter, in baseline standard deviations. Live
+/// frames give `h1c_h2c_db` and `alpha_ratio_db` only. `None` when no
+/// feature is available in both. Unvalidated: present it as a proxy only.
+#[uniffi::export]
+pub fn weight_index(features: WeightFeatures, baseline: WeightBaseline) -> Option<f64> {
+    vq::weight::weight_index(
+        &vq::weight::WeightFeatures {
+            h1c_h2c_db: features.h1c_h2c_db,
+            alpha_ratio_db: features.alpha_ratio_db,
+            cpps_db: features.cpps_db,
+        },
+        &vq::weight::WeightBaseline {
+            h1c_h2c_db: stats_in(baseline.h1c_h2c_db),
+            alpha_ratio_db: stats_in(baseline.alpha_ratio_db),
+            cpps_db: stats_in(baseline.cpps_db),
+        },
+    )
 }
 
 /// Live analysis: push microphone samples from the audio thread, pull frames
@@ -350,6 +510,38 @@ mod tests {
         let mut s = default_settings();
         s.formant_ceiling_hz = Some(20_000.0);
         assert!(analyse_recording(vec![], 48_000, s).is_err());
+    }
+
+    #[test]
+    fn voice_quality_and_weight_index() {
+        let x = tone(180.0, 44_100, 1.0);
+        let q = measure_voice_quality(x, 44_100, default_settings()).unwrap();
+        assert!(q.voiced_s > 0.8, "{q:?}");
+        assert!(q.cpps_db.is_some() && q.hnr_db.is_some() && q.jitter_local.is_some());
+        assert_eq!(q.quality_version, vq::QUALITY_VERSION);
+        // An utterance scored against itself as baseline is at about zero.
+        let w = weight_index(q.weight_features, q.weight_baseline).unwrap();
+        assert!(w.abs() < 0.5, "{w}");
+        let empty = WeightFeatures {
+            h1c_h2c_db: None,
+            alpha_ratio_db: None,
+            cpps_db: None,
+        };
+        assert!(weight_index(empty, q.weight_baseline).is_none());
+    }
+
+    #[test]
+    fn live_frames_carry_spectral_measures() {
+        let live = LiveAnalyser::new(16_000, default_settings()).unwrap();
+        live.push(tone(150.0, 16_000, 0.5));
+        let frames = live.finish();
+        assert!(
+            frames
+                .iter()
+                .filter(|f| f.f0_hz.is_some())
+                .all(|f| f.spectral.is_some())
+        );
+        assert!(frames.iter().any(|f| f.spectral.is_some()));
     }
 
     #[test]

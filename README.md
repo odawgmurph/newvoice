@@ -4,7 +4,7 @@ An offline voice-training app for transfeminine and nonbinary voice goals, built
 
 NewVoice is an education app. It is not therapy and does not diagnose or treat anything.
 
-**Status:** Stage 1 (analysis core) in progress: pitch, formants and vocal tract length are built and validated against Praat ([report](docs/validation/stage1-synthetic.md)); voice-quality measures are next. See [`docs/build-plan.md`](docs/build-plan.md).
+**Status:** Stage 1 (analysis core) in progress. Pitch, formants, vocal tract length and the voice-quality measures (H1–H2, alpha ratio, CPPS, HNR, jitter, shimmer, weight index) are built and validated against Praat; see the [report](docs/validation/stage1-synthetic.md). Next: pYIN, the resonance score, and real recordings in the corpus. See [`docs/build-plan.md`](docs/build-plan.md).
 
 ## Repository
 
