@@ -47,10 +47,39 @@ export type CaptureInfo = {
   inputGainSettable: boolean;
   inputGain: number;
   coreVersion: string;
+  /** A test clip is being recorded. */
+  recording: boolean;
+  /** Length of the last finished test clip in seconds, 0 if none. */
+  testClipS: number;
 };
 
 export type StartOptions = {
   formantCeilingHz?: number;
+  /** Record a test clip this long for the diagnostics export; capture stops by itself at the end. */
+  recordSeconds?: number;
+};
+
+/** Summary of a measurement series: median, 95th percentile, max, count. */
+export type SeriesStats = { median: number; p95: number; max: number; n: number } | null;
+
+/** What JavaScript measured during the test clip; native code adds the rest. */
+export type AppReport = {
+  micToScreenMs: SeriesStats;
+  bridgeMs: SeriesStats;
+  analysisLagMs: SeriesStats;
+  inputLatencyMs: SeriesStats;
+  /** One sample per second. */
+  uiFps: SeriesStats;
+  jsFps: SeriesStats;
+  /** Free-text note from the tester, e.g. what they said or the room. */
+  note: string;
+};
+
+export type ExportResult = {
+  /** False when the share sheet was dismissed without sending. */
+  shared: boolean;
+  activity: string;
+  files: string[];
 };
 
 export type NewVoiceAudioModuleEvents = {

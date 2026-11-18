@@ -7,7 +7,7 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import migrations from '../../drizzle/migrations';
 import * as schema from './schema';
 
-// The database is encrypted with SQLCipher (decision D14). The key is 32
+// The database is encrypted with SQLCipher (decision D15). The key is 32
 // random bytes kept in the Keychain/Keystore, readable only while the phone
 // is unlocked and never copied to backups or another device. The app PIN
 // gates the UI; it does not derive this key.

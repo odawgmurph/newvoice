@@ -10,7 +10,7 @@ import { digestsEqual, isValidPin, pinHashInput, waitRemaining } from './pin';
 // The PIN is stored as a salted SHA-256. A 4–8 digit PIN can't resist an
 // offline guess whatever the hash, so the protection is that the hash sits in
 // the Keychain (device-only, unlocked-only) next to the database key, plus the
-// retry wait in pin.ts. See decision D14.
+// retry wait in pin.ts. See decision D15.
 
 const OPTS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
