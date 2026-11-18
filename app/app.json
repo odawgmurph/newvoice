@@ -24,6 +24,28 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "newvoice",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Unlock NewVoice with Face ID."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock NewVoice with Face ID."
+        }
+      ]
+    ]
   }
 }
