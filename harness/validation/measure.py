@@ -91,9 +91,16 @@ def praat_fixed_formants(case: Case, ceiling_hz: float, clean: bool) -> np.ndarr
     return np.nanmedian(praat.formants_at(case, t, ceiling_hz, n=3, max_bandwidth_hz=bw), axis=0)
 
 
-def ours_vowel(case: Case) -> dict:
-    """newvoice-core's sustained-vowel measurement (multi-ceiling sweep)."""
-    return core.on_case(case, "vowel")
+_VOWEL_CACHE: dict[tuple, dict] = {}
+
+
+def ours_vowel(case: Case, *options: str) -> dict:
+    """newvoice-core's sustained-vowel measurement (multi-ceiling sweep),
+    cached per case name and options."""
+    key = (case.name, options)
+    if key not in _VOWEL_CACHE:
+        _VOWEL_CACHE[key] = core.on_case(case, "vowel", *options)
+    return _VOWEL_CACHE[key]
 
 
 def group_ceiling(case: Case) -> float:

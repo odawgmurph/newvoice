@@ -13,6 +13,8 @@ from validation.corpus import REPO_ROOT, Case
 
 CORE_DIR = REPO_ROOT / "core"
 CLI = CORE_DIR / "target" / "release" / "newvoice-cli"
+WASM_CLI = CORE_DIR / "target" / "wasm32-wasip1" / "release" / "newvoice-cli.wasm"
+WASI_RUNNER = REPO_ROOT / "harness" / "tools" / "wasi-run.mjs"
 
 
 @cache
@@ -29,9 +31,35 @@ def build() -> Path:
     return CLI
 
 
-def run(command: str, wav: Path, *options: str) -> dict | None:
+@cache
+def build_wasm() -> Path:
+    """Builds the CLI for WebAssembly (WASI), once per process."""
+    result = subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--locked",
+            "-p",
+            "newvoice-cli",
+            "--target",
+            "wasm32-wasip1",
+        ],
+        cwd=CORE_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"building newvoice-cli for WASI failed:\n{result.stderr}")
+    return WASM_CLI
+
+
+def run(command: str, wav: Path, *options: str, wasm: bool = False) -> dict | None:
+    program = (
+        ["node", "--no-warnings", str(WASI_RUNNER), str(build_wasm())] if wasm else [str(build())]
+    )
     out = subprocess.run(
-        [str(build()), command, str(wav), *options],
+        [*program, command, str(wav.resolve()), *options],
         check=True,
         capture_output=True,
         text=True,
@@ -40,7 +68,13 @@ def run(command: str, wav: Path, *options: str) -> dict | None:
 
 
 def on_case(case: Case, command: str, *options: str) -> dict | None:
+    return run_signal(case.name, case.signal, case.rate, command, *options)
+
+
+def run_signal(
+    name: str, signal, rate: int, command: str, *options: str, wasm: bool = False
+) -> dict | None:
     with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / f"{case.name}.wav"
-        synth.write_wav(wav, case.signal, case.rate)
-        return run(command, wav, *options)
+        wav = Path(tmp) / f"{name}.wav"
+        synth.write_wav(wav, signal, rate)
+        return run(command, wav, *options, wasm=wasm)

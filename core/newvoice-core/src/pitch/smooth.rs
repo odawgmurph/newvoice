@@ -13,6 +13,10 @@ pub struct SmoothConfig {
     /// A run entered or left by a larger jump is dropped unless it lasts at
     /// least this many frames.
     pub min_run_frames: usize,
+    /// With `Some(t)`, the median only replaces a frame that is more than
+    /// `t` semitones from it (an outlier); other frames keep their own
+    /// value. `None` is a plain median filter.
+    pub median_outlier_st: Option<f64>,
 }
 
 impl Default for SmoothConfig {
@@ -21,6 +25,9 @@ impl Default for SmoothConfig {
             median_frames: 5,
             max_jump_st: 7.0,
             min_run_frames: 5, // 50 ms at a 10 ms hop
+            // Real speech moves too fast for a plain 5-frame median: it
+            // clips contour peaks and biases voicing edges (decision D11).
+            median_outlier_st: Some(1.0),
         }
     }
 }
@@ -86,10 +93,15 @@ pub fn smooth_window(
         buf.extend(guarded[lo..=hi].iter().flatten());
         buf.sort_by(f64::total_cmp);
         let m = buf.len();
-        *o = Some(if m % 2 == 1 {
+        let med = if m % 2 == 1 {
             buf[m / 2]
         } else {
             0.5 * (buf[m / 2 - 1] + buf[m / 2])
+        };
+        let own = guarded[i].expect("voiced");
+        *o = Some(match cfg.median_outlier_st {
+            Some(t) if (hz_to_st(own) - hz_to_st(med)).abs() <= t => own,
+            _ => med,
         });
     }
     out
@@ -145,8 +157,29 @@ mod tests {
     fn median_removes_single_frame_wobble_and_keeps_glides() {
         let mut v: Vec<f64> = (0..30).map(|i| 150.0 + i as f64).collect();
         v[15] = 172.0; // 7 Hz off the glide, within the jump limit
-        let out = smooth(&track(&v), &SmoothConfig::default());
+        let plain = SmoothConfig {
+            median_outlier_st: None,
+            ..SmoothConfig::default()
+        };
+        let out = smooth(&track(&v), &plain);
         assert_eq!(out[15], Some(166.0)); // median of 163, 164, 172, 166, 167
         assert_eq!(out[10], Some(160.0));
+    }
+
+    #[test]
+    fn outlier_median_keeps_frames_near_the_median() {
+        // A contour peak: a plain median clips it, the outlier median keeps
+        // it, and still replaces a 3-semitone blip.
+        let mut v = vec![
+            200.0, 204.0, 208.0, 212.0, 216.0, 212.0, 208.0, 204.0, 200.0,
+        ];
+        let plain = SmoothConfig {
+            median_outlier_st: None,
+            ..SmoothConfig::default()
+        };
+        assert_eq!(smooth(&track(&v), &plain)[4], Some(212.0));
+        assert_eq!(smooth(&track(&v), &SmoothConfig::default())[4], Some(216.0));
+        v[4] = 255.0;
+        assert_eq!(smooth(&track(&v), &SmoothConfig::default())[4], Some(212.0));
     }
 }

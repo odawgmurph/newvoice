@@ -4,7 +4,13 @@ An offline voice-training app for transfeminine and nonbinary voice goals, built
 
 NewVoice is an education app. It is not therapy and does not diagnose or treat anything.
 
-**Status:** Stage 1 (analysis core) in progress. Pitch, formants, vocal tract length and the voice-quality measures (H1–H2, alpha ratio, CPPS, HNR, jitter, shimmer, weight index) are built and validated against Praat; see the [report](docs/validation/stage1-synthetic.md). Next: pYIN, the resonance score, and real recordings in the corpus. See [`docs/build-plan.md`](docs/build-plan.md).
+**Status:** Stage 1 (analysis core) is done. The core covers:
+
+- pitch: YIN/MPM live, pYIN for recordings
+- formants, vocal tract length and the resonance score
+- the voice-quality measures (H1–H2, alpha ratio, CPPS, HNR, jitter, shimmer, weight index)
+
+It is validated against Praat on synthetic audio, on hand-checked Hillenbrand vowels, and on LibriSpeech speech (clean, noisy and through a telephone channel). See the reports: [synthetic](docs/validation/stage1-synthetic.md) and [real recordings](docs/validation/stage1-real.md). Next is Stage 2, the native capture spike; see [`docs/build-plan.md`](docs/build-plan.md).
 
 ## Repository
 
@@ -24,16 +30,20 @@ Rust (the toolchain is pinned by `core/rust-toolchain.toml`):
 cd core && cargo test --workspace
 ```
 
-Harness, including the Praat golden tests (needs the Rust toolchain; builds `newvoice-cli`):
+Harness, including the Praat golden tests. It needs the Rust toolchain and Node 22 (for the WebAssembly check). It builds `newvoice-cli`, and on first run it downloads the Hillenbrand recordings (about 21 MB, pinned by SHA-256) into `harness/.cache`:
 
 ```bash
 cd harness && uv sync && uv run pytest
 ```
 
-Validation report (after any analysis change):
+Validation reports (after any analysis change):
 
 ```bash
 cd harness && uv run python -m validation.report
+```
+
+```bash
+cd harness && uv run python -m validation.report_real
 ```
 
 Reference norms:

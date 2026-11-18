@@ -1,0 +1,172 @@
+{
+  "source": {
+    "corpus": "LibriSpeech dev-clean",
+    "citation": "Panayotov, V., Chen, G., Povey, D., & Khudanpur, S. (2015). LibriSpeech: an ASR corpus based on public domain audio books. ICASSP.",
+    "license": "CC BY 4.0",
+    "url": "https://www.openslr.org/resources/12/dev-clean.tar.gz",
+    "sha256": "76f87d090650617fca0cac8f88b9416e0ebf80350acb97b343a85fa903728ab3"
+  },
+  "selection": "First 10 men and 10 women by speaker ID; per speaker the first utterance in file order lasting 3.5-6.0 s; files unmodified.",
+  "utterances": [
+    {
+      "file": "174-168635-0000.flac",
+      "speaker": "174",
+      "sex": "M",
+      "duration_s": 4.53,
+      "sha256": "dbb765967c6a51c8e794fb0098240b1e070c6b1bf0594b218570631604aab38f",
+      "transcript": "HE HAD NEVER BEEN FATHER LOVER HUSBAND FRIEND"
+    },
+    {
+      "file": "251-118436-0001.flac",
+      "speaker": "251",
+      "sex": "M",
+      "duration_s": 3.725,
+      "sha256": "3a179746f8333af93ef925b2108d53cbee8b12d5976e69bc633d1e6167b4e679",
+      "transcript": "I TELL YOU IT IS NOT POISON SHE CRIED"
+    },
+    {
+      "file": "422-122949-0002.flac",
+      "speaker": "422",
+      "sex": "M",
+      "duration_s": 4.475,
+      "sha256": "6369b88474b4560c960d7e462660301420cefd6b897b2ff744adbefe29db43be",
+      "transcript": "WE TRUTHFUL ONES THE NOBILITY IN ANCIENT GREECE CALLED THEMSELVES"
+    },
+    {
+      "file": "652-129742-0002.flac",
+      "speaker": "652",
+      "sex": "M",
+      "duration_s": 3.7,
+      "sha256": "65125efea2931a59c90a465ff974fb5e8169d5185ae943dcf98f4ca2120277c6",
+      "transcript": "SERVE WITH FRENCH DRESSING HIDDEN UNDER THE LEAVES OF THE NEST"
+    },
+    {
+      "file": "777-126732-0002.flac",
+      "speaker": "777",
+      "sex": "M",
+      "duration_s": 5.06,
+      "sha256": "810af64e7584b35c6e51c663bebfd139f551168fac60ffc163566941775ed1a0",
+      "transcript": "AT BEST THEY CAN ONLY INTERPRET THE MIND OF THE PROPHET AND CAN HAVE NO OBJECTIVE VALUE"
+    },
+    {
+      "file": "1272-128104-0000.flac",
+      "speaker": "1272",
+      "sex": "M",
+      "duration_s": 5.855,
+      "sha256": "4e25e22555cd16e90edb0a3b49fdcf1fe652b2a1250ab643634db33895c75b41",
+      "transcript": "MISTER QUILTER IS THE APOSTLE OF THE MIDDLE CLASSES AND WE ARE GLAD TO WELCOME HIS GOSPEL"
+    },
+    {
+      "file": "2078-142845-0011.flac",
+      "speaker": "2078",
+      "sex": "M",
+      "duration_s": 4.53,
+      "sha256": "d6fdb91035192bace08559961f08860771d4aae10443f8339c6f0f15091568d0",
+      "transcript": "IT WILL GROW ON POOR SOILS AND IS EXTREMELY PRODUCTIVE"
+    },
+    {
+      "file": "2086-149220-0007.flac",
+      "speaker": "2086",
+      "sex": "M",
+      "duration_s": 5.24,
+      "sha256": "d7228600d7cb69b535a9b5234651ae5d62a10bb261a97805dc5485229f1c0b14",
+      "transcript": "IT NOW CONTAINED ONLY CHANTICLEER HIS TWO WIVES AND A SOLITARY CHICKEN"
+    },
+    {
+      "file": "2428-83699-0002.flac",
+      "speaker": "2428",
+      "sex": "M",
+      "duration_s": 4.26,
+      "sha256": "1cc0becc0a0b0bf091d41b3c6d7b2852338d96b0afa127808a9b17c61acf369b",
+      "transcript": "THE REPLY WAS WRITTEN IN A SPRAWLING FEMININE HAND IT WAS A LITTLE VAGUE"
+    },
+    {
+      "file": "2803-154320-0002.flac",
+      "speaker": "2803",
+      "sex": "M",
+      "duration_s": 3.53,
+      "sha256": "18b7cb1fb2b2e9c622ef11a93faa31cba576f061267a043382fe8cf462430131",
+      "transcript": "THEIR FRIENDS DID THEIR BEST TO AMUSE THEM"
+    },
+    {
+      "file": "84-121123-0001.flac",
+      "speaker": "84",
+      "sex": "F",
+      "duration_s": 3.99,
+      "sha256": "63c0d685d385a09cceebfeeb1f18df17b4b99a76d593dbbd1c31d34f903be411",
+      "transcript": "BUT IN LESS THAN FIVE MINUTES THE STAIRCASE GROANED BENEATH AN EXTRAORDINARY WEIGHT"
+    },
+    {
+      "file": "1462-170138-0001.flac",
+      "speaker": "1462",
+      "sex": "F",
+      "duration_s": 3.985,
+      "sha256": "0962f97611ce393f6b507e372e5768eda3545b2bd4517571085203ee13ab05e2",
+      "transcript": "HUGH'S WRITTEN A DELIGHTFUL PART FOR HER AND SHE'S QUITE INEXPRESSIBLE"
+    },
+    {
+      "file": "1673-143397-0007.flac",
+      "speaker": "1673",
+      "sex": "F",
+      "duration_s": 5.16,
+      "sha256": "aca6bbce6c2112056c55fb0a649d980e57db8cab832ceee6a11e5662e9d25aa4",
+      "transcript": "EXTERMINATE WITH ME THE HERETICS AND WITH YOU I WILL EXTERMINATE THE PERSIANS"
+    },
+    {
+      "file": "1919-142785-0003.flac",
+      "speaker": "1919",
+      "sex": "F",
+      "duration_s": 5.405,
+      "sha256": "a94224c80d76de097d12c6b2daa6ec9481c86261637afe64887a85ea18221c41",
+      "transcript": "THE LONG PEPPER IS LESS AROMATIC THAN THE BLACK BUT ITS OIL IS MORE PUNGENT"
+    },
+    {
+      "file": "1988-147956-0002.flac",
+      "speaker": "1988",
+      "sex": "F",
+      "duration_s": 4.395,
+      "sha256": "1ddf444b2dd7b371463678a8518c17217440e2a545f25bf9cfdce40a6043b9c1",
+      "transcript": "IT'S NO BETTER THAN A BADGER HOLE NO PROPER DUGOUT AT ALL"
+    },
+    {
+      "file": "1993-147149-0002.flac",
+      "speaker": "1993",
+      "sex": "F",
+      "duration_s": 5.76,
+      "sha256": "399f4683e94123f112caffd903130dcae5d5c735473b612e08f6e576f774c7a4",
+      "transcript": "THE GHOUL LIKE FEVER WAS NOT TO BE BRAVED WITH IMPUNITY AND BAULKED OF ITS PREY"
+    },
+    {
+      "file": "2035-147960-0001.flac",
+      "speaker": "2035",
+      "sex": "F",
+      "duration_s": 3.925,
+      "sha256": "0b6b0ab9d07b226bb91c3051b3d8e674267207a1b2e93a8a26ef959ade711896",
+      "transcript": "THIS CHANGE CAME ABOUT FROM AN ADVENTURE WE HAD TOGETHER"
+    },
+    {
+      "file": "2277-149874-0002.flac",
+      "speaker": "2277",
+      "sex": "F",
+      "duration_s": 5.095,
+      "sha256": "5ed9607968dcf4d5c81628676d7efa75e7397a6628174c6094e8e05ec5f205e2",
+      "transcript": "TO HIM THE PRESENCE OR ABSENCE OF HIS WIFE'S SISTER WAS A MATTER OF INDIFFERENCE"
+    },
+    {
+      "file": "2412-153947-0016.flac",
+      "speaker": "2412",
+      "sex": "F",
+      "duration_s": 5.185,
+      "sha256": "5cda3f366bc88f13296084bccd2cbda149f6c0b033330eea0d701070c682a831",
+      "transcript": "THIS HOWEVER MAY NOT BE FOR THE COPYRIGHT WILL PROBABLY EXPIRE IN A LITTLE OVER TWELVE YEARS"
+    },
+    {
+      "file": "3081-166546-0003.flac",
+      "speaker": "3081",
+      "sex": "F",
+      "duration_s": 4.125,
+      "sha256": "3a907f5ce5e15d010b05959f51beb61a0023bfe57968e5bb6ba7599929eacfc7",
+      "transcript": "THE LADY IS NOT THE MOTHER OF THE BOYS BUT THEIR AUNT"
+    }
+  ]
+}

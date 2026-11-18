@@ -3,6 +3,7 @@ channel = "1.97.0"
 components = ["rustfmt", "clippy"]
 targets = [
   "wasm32-unknown-unknown",
+  "wasm32-wasip1", # harness: run the CLI under WASI to check WASM == native
   "aarch64-linux-android",
   "armv7-linux-androideabi",
   "x86_64-linux-android",

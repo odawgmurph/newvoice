@@ -10,6 +10,33 @@ Nov 17, 2026 · built from *NewVoice — Recommended Tech Stack* and the *Transf
 
 The order follows the tech-stack doc: **risky DSP first → prove capture on real phones → then build the product on top.** Each stage has exit criteria that must pass before the next stage depends on it.
 
+## Progress
+
+| Stage | Status | Notes |
+|---|---|---|
+| 0 Foundations | Done | Expo/React Native chosen (D1). No advisors for now, so safety limits are fixed in code (D2). Norms come from raw data (D6). CI builds every target (D7). |
+| 1 Analysis core + Praat harness | Done | Exit criteria met, except low-end ARM timing, which moved to Stage 2 (needs the device matrix). Evidence: [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md) and [`validation/stage1-real.md`](validation/stage1-real.md); decisions D8–D11. |
+| 2 Capture spike | Next | |
+
+**Stage 1, as built:**
+- YIN/MPM live and pYIN for recordings.
+- Semitone statistics.
+- Multi-ceiling Burg formants, with known-boundary vowel measurement.
+- ΔF/aVTL.
+- CPPS, H1*–H2*, alpha, Hammarberg, L/H, HNR, jitter and shimmer.
+- The weight index and the resonance score, both versioned heuristics.
+- Fitted formant confidence.
+- Streaming and batch FFI.
+- Golden tests against Praat:
+  - synthetic corpus with known truth;
+  - Hillenbrand vowels against hand-checked values;
+  - 20 LibriSpeech utterances, clean, noisy and through a telephone channel;
+  - WASM output checked against native.
+
+Differences from the plan:
+- VCTK is not in the corpus; LibriSpeech and Hillenbrand cover read speech and vowels.
+- "Codec" degradation is an emulated telephone channel (band-pass, 8 kHz, μ-law), not real codecs. Real codecs and Bluetooth paths come in with the Stage 2 device matrix.
+
 ---
 
 ## Stage 0 — Foundations and decisions (≈1–2 weeks)
@@ -60,6 +87,7 @@ The order follows the tech-stack doc: **risky DSP first → prove capture on rea
 - Audio flows mic → Rust on a native thread. Only computed results reach JS/Dart, never raw audio.
 - Bare app with a live pitch trace on a semitone axis plus a live F2 readout, drawn with react-native-skia + Reanimated (or the Flutter equivalent).
 - **Capability detection:** report whether the device actually honoured unprocessed mode. Where it didn't, flag reduced accuracy and record it in diagnostics.
+- **Real-time budget on low-end ARM** (moved from Stage 1): run `newvoice-cli bench` (or the same loop through the FFI) on the cheapest phones in the matrix; per-frame cost must fit easily inside the 10 ms hop. It is about 0.55 ms per frame on x86.
 - **Device matrix:** test across roughly 15–25 phones covering budget and flagship Android brands and several iPhone generations, with built-in mic, wired headset and Bluetooth. Compare readings against a reference recording run through Praat.
 
 **Exit:** <100 ms mic-to-screen latency; steady 60 fps; per-device accuracy table published internally; a supported-device policy decided, including a Bluetooth-mic warning.

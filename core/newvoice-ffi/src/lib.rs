@@ -26,6 +26,8 @@ pub fn core_version() -> String {
 pub enum PitchAlgorithm {
     Yin,
     Mpm,
+    /// Finished recordings only; `LiveAnalyser` rejects it.
+    Pyin,
 }
 
 /// The settings an app can change. Everything else uses the core defaults.
@@ -41,7 +43,7 @@ pub struct AnalysisSettings {
     pub silence_dbfs: f64,
 }
 
-/// The core's default settings.
+/// The core's default settings for live analysis.
 #[uniffi::export]
 pub fn default_settings() -> AnalysisSettings {
     let d = core::Config::default();
@@ -51,6 +53,16 @@ pub fn default_settings() -> AnalysisSettings {
         pitch_algorithm: PitchAlgorithm::Yin,
         formant_ceiling_hz: d.formants.map(|f| f.ceiling_hz),
         silence_dbfs: d.silence_dbfs,
+    }
+}
+
+/// Default settings for scoring finished recordings: as
+/// [`default_settings`], but with pYIN, which decodes the whole utterance.
+#[uniffi::export]
+pub fn default_recording_settings() -> AnalysisSettings {
+    AnalysisSettings {
+        pitch_algorithm: PitchAlgorithm::Pyin,
+        ..default_settings()
     }
 }
 
@@ -96,6 +108,7 @@ fn config(sample_rate: u32, s: &AnalysisSettings) -> Result<core::Config, Analys
         pitch_algorithm: match s.pitch_algorithm {
             PitchAlgorithm::Yin => core::pitch::PitchAlgorithm::Yin,
             PitchAlgorithm::Mpm => core::pitch::PitchAlgorithm::Mpm,
+            PitchAlgorithm::Pyin => core::pitch::PitchAlgorithm::Pyin,
         },
         formants: s.formant_ceiling_hz.map(|ceiling_hz| FormantConfig {
             ceiling_hz,
@@ -126,7 +139,8 @@ pub struct FrameResult {
     pub f0_st: Option<f64>,
     /// F1, F2, … lowest first. Empty when formants are off or it's silent.
     pub formants: Vec<Formant>,
-    /// Provisional 0-1 trust in F1/F2; hide formant readouts when low.
+    /// 0-1 trust in F1/F2 (about the chance both are within 10%); hide
+    /// formant readouts when low.
     pub formant_confidence: f64,
     /// Spectral voice-quality measures, on frames with an F0 only.
     pub spectral: Option<FrameSpectral>,
@@ -247,6 +261,9 @@ pub struct VowelResult {
     pub f4_hz: Option<f64>,
     pub delta_f_hz: Option<f64>,
     pub avtl_cm: Option<f64>,
+    /// ΔF on the resonance score's scale (0 and 1 at the two reference
+    /// groups' speaker-level ΔF).
+    pub delta_f_position: Option<f64>,
     pub confidence: f64,
 }
 
@@ -276,8 +293,87 @@ pub fn measure_sustained_vowel(
         f4_hz: m.formants_hz[3],
         delta_f_hz: m.delta_f_hz,
         avtl_cm: m.avtl_cm,
+        delta_f_position: m.delta_f_hz.and_then(core::resonance::delta_f_position),
         confidence: m.confidence,
     }))
+}
+
+/// A measured vowel token for the resonance score.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ResonanceToken {
+    /// Hillenbrand code (`"iy"`) or IPA (`"i"`) of the vowel the user was
+    /// asked to produce.
+    pub vowel: String,
+    pub f1_hz: Option<f64>,
+    pub f2_hz: Option<f64>,
+    pub f3_hz: Option<f64>,
+    /// Trust in the token, for example `VowelResult.confidence`.
+    pub weight: f64,
+}
+
+/// The vowel-normalised resonance score: a heuristic position between two
+/// reference group means (0 and 1), not a perception estimate. Label it
+/// brighter/darker unless the user opted into gendered bands.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ResonanceResult {
+    pub version: u32,
+    pub score: f64,
+    pub f1: Option<f64>,
+    pub f2: Option<f64>,
+    pub f3: Option<f64>,
+    pub tokens_used: u32,
+}
+
+/// Scores vowel tokens. `None` when no token has a scorable formant; an
+/// error for an unknown vowel.
+#[uniffi::export]
+pub fn resonance_score(
+    tokens: Vec<ResonanceToken>,
+) -> Result<Option<ResonanceResult>, AnalysisError> {
+    let tokens = tokens
+        .iter()
+        .map(|t| {
+            Ok(core::VowelToken {
+                vowel: core::VowelNorm::find(&t.vowel)
+                    .ok_or_else(|| invalid(&format!("unknown vowel {}", t.vowel)))?,
+                formants_hz: [t.f1_hz, t.f2_hz, t.f3_hz],
+                weight: t.weight,
+            })
+        })
+        .collect::<Result<Vec<_>, AnalysisError>>()?;
+    Ok(core::resonance_score(&tokens).map(|r| ResonanceResult {
+        version: core::resonance::RESONANCE_SCORE_VERSION,
+        score: r.score,
+        f1: r.by_formant[0],
+        f2: r.by_formant[1],
+        f3: r.by_formant[2],
+        tokens_used: r.tokens_used as u32,
+    }))
+}
+
+/// A reference vowel the resonance score knows.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ReferenceVowel {
+    pub code: String,
+    pub ipa: String,
+    /// The h_d word it was recorded in, for example "heed".
+    pub word: String,
+    /// Whether F1, F2, F3 count towards its score.
+    pub scored_formants: Vec<bool>,
+}
+
+/// The vowels [`resonance_score`] accepts.
+#[uniffi::export]
+pub fn reference_vowels() -> Vec<ReferenceVowel> {
+    core::VowelNorm::all()
+        .iter()
+        .map(|v| ReferenceVowel {
+            code: v.code.to_owned(),
+            ipa: v.ipa.to_owned(),
+            word: v.word.to_owned(),
+            scored_formants: (0..3).map(|k| v.scores_formant(k)).collect(),
+        })
+        .collect()
 }
 
 /// Mean and standard deviation of one feature.
@@ -427,6 +523,11 @@ impl LiveAnalyser {
 impl LiveAnalyser {
     #[uniffi::constructor]
     pub fn new(sample_rate: u32, settings: AnalysisSettings) -> Result<Arc<Self>, AnalysisError> {
+        if settings.pitch_algorithm == PitchAlgorithm::Pyin {
+            return Err(invalid(
+                "pYIN needs the whole utterance; use analyse_recording",
+            ));
+        }
         let cfg = config(sample_rate, &settings)?;
         Ok(Arc::new(Self {
             inner: Mutex::new(core::StreamAnalyser::new(f64::from(sample_rate), cfg)),
@@ -510,6 +611,37 @@ mod tests {
         let mut s = default_settings();
         s.formant_ceiling_hz = Some(20_000.0);
         assert!(analyse_recording(vec![], 48_000, s).is_err());
+        assert!(LiveAnalyser::new(48_000, default_recording_settings()).is_err());
+    }
+
+    #[test]
+    fn resonance_scores_tokens() {
+        let token = |vowel: &str, f2| ResonanceToken {
+            vowel: vowel.into(),
+            f1_hz: None,
+            f2_hz: Some(f2),
+            f3_hz: None,
+            weight: 1.0,
+        };
+        let men = resonance_score(vec![token("iy", 2322.0)]).unwrap().unwrap();
+        let women = resonance_score(vec![token("i", 2761.0)]).unwrap().unwrap();
+        assert!(men.score.abs() < 0.05 && (women.score - 1.0).abs() < 0.05);
+        assert_eq!(women.tokens_used, 1);
+        assert!(resonance_score(vec![token("zz", 2000.0)]).is_err());
+        assert_eq!(resonance_score(vec![]).unwrap(), None);
+        let vowels = reference_vowels();
+        assert_eq!(vowels.len(), 12);
+        let uw = vowels.iter().find(|v| v.code == "uw").unwrap();
+        assert_eq!(uw.scored_formants, [true, false, true]);
+    }
+
+    #[test]
+    fn recordings_can_use_pyin() {
+        let x = tone(196.0, 48_000, 0.5);
+        let a = analyse_recording(x, 48_000, default_recording_settings()).unwrap();
+        let p = a.pitch.unwrap();
+        assert!((p.median_hz / 196.0 - 1.0).abs() < 0.01, "{p:?}");
+        assert!(p.voiced_s > 0.4, "{p:?}");
     }
 
     #[test]

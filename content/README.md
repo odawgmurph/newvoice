@@ -8,6 +8,6 @@ Data the app bundles and can update over the air. It's kept separate from code s
   cd harness && uv run python -m norms.build_norms
   ```
 
-  CI fails if the committed file is out of date. See `docs/decisions.md` (D6) for the method.
+  The same run regenerates `core/newvoice-core/src/reference_norms.rs`, the table the analysis core's resonance score reads. CI fails if either is out of date. See `docs/decisions.md` (D6, D11) for the method.
 
 - The curriculum (units → skills → lessons → exercises) arrives in Stage 5.

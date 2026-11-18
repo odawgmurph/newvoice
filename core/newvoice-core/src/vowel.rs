@@ -62,7 +62,7 @@ pub struct VowelMeasurement {
     pub delta_f_hz: Option<f64>,
     /// Apparent vocal tract length from ΔF.
     pub avtl_cm: Option<f64>,
-    /// Provisional confidence in the formants, 0–1 (see
+    /// Confidence in the formants, 0–1 (see
     /// [`crate::analysis::Frame::formant_confidence`]), scaled by how many
     /// frames had both F1 and F2.
     pub confidence: f64,
@@ -106,10 +106,68 @@ pub fn measure_vowel(
         return None;
     }
     let (t_start, t_end) = (frames[s].time_s, frames[e].time_s);
+    measure_steady_state(
+        samples,
+        sample_rate,
+        cfg,
+        &analysis.frames,
+        t_start,
+        t_end,
+        voiced_s,
+    )
+}
+
+/// Measures a vowel whose boundaries are known (a prompted vowel, or one
+/// located by alignment): the steady state is the middle `steady_fraction`
+/// of `[start_s, end_s]` (handbook §3.3). Returns `None` when the segment
+/// has no voiced frames there or no ceiling finds F1–F3.
+pub fn measure_vowel_between(
+    samples: &[f32],
+    sample_rate: f64,
+    start_s: f64,
+    end_s: f64,
+    cfg: &VowelConfig,
+) -> Option<VowelMeasurement> {
+    if end_s.partial_cmp(&start_s) != Some(std::cmp::Ordering::Greater) {
+        return None;
+    }
+    let pitch_cfg = Config {
+        formants: None,
+        ..cfg.analysis.clone()
+    };
+    let analysis = analyse(samples, sample_rate, &pitch_cfg);
+    let voiced_s = analysis
+        .frames
+        .iter()
+        .filter(|f| f.f0_hz.is_some() && (start_s..=end_s).contains(&f.time_s))
+        .count() as f64
+        * analysis.hop_s;
+    measure_steady_state(
+        samples,
+        sample_rate,
+        cfg,
+        &analysis.frames,
+        start_s,
+        end_s,
+        voiced_s,
+    )
+}
+
+/// The shared second half: formants, ΔF and confidence over the middle of
+/// `[t_start, t_end]`.
+fn measure_steady_state(
+    samples: &[f32],
+    sample_rate: f64,
+    cfg: &VowelConfig,
+    frames: &[crate::Frame],
+    t_start: f64,
+    t_end: f64,
+    voiced_s: f64,
+) -> Option<VowelMeasurement> {
     let margin = 0.5 * (1.0 - cfg.steady_fraction) * (t_end - t_start);
     let (start_s, end_s) = (t_start + margin, t_end - margin);
 
-    let f0s: Vec<f64> = frames[s..=e]
+    let f0s: Vec<f64> = frames
         .iter()
         .filter(|f| (start_s..=end_s).contains(&f.time_s))
         .filter_map(|f| f.f0_hz)
@@ -207,6 +265,29 @@ mod tests {
         assert!((0.9..1.1).contains(&m.voiced_s), "{m:?}");
         assert!(m.start_s > 0.4 && m.end_s < 1.0, "{m:?}");
         assert!(m.confidence > 0.8, "{m:?}");
+    }
+
+    #[test]
+    fn known_boundaries_measure_their_middle() {
+        let formants = [
+            (500.0, 60.0),
+            (1500.0, 80.0),
+            (2500.0, 100.0),
+            (3500.0, 130.0),
+            (4500.0, 170.0),
+        ];
+        // 0.2 s of padding, 0.3 s of vowel: shorter than the 0.25 s a
+        // sustained vowel needs once edges are trimmed, but fine with known
+        // boundaries.
+        let x = padded(vowel(150.0, &formants, RATE, (0.3 * RATE) as usize, 0.2));
+        let m = measure_vowel_between(&x, RATE, 0.2, 0.5, &VowelConfig::default()).unwrap();
+        assert!((m.start_s - 0.275).abs() < 1e-9 && (m.end_s - 0.425).abs() < 1e-9);
+        assert!(
+            (m.formants_hz[1].unwrap() / 1500.0 - 1.0).abs() < 0.05,
+            "{m:?}"
+        );
+        assert!(measure_vowel_between(&x, RATE, 0.5, 0.2, &VowelConfig::default()).is_none());
+        assert!(measure_vowel_between(&x, RATE, 0.0, 0.15, &VowelConfig::default()).is_none());
     }
 
     #[test]

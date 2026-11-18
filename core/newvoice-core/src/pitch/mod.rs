@@ -2,9 +2,10 @@
 //!
 //! [`yin`] and [`mpm`] estimate F0 for one frame. [`smooth`] cleans a track of
 //! frame estimates with the octave-jump guard and median filter from handbook
-//! §3.2.
+//! §3.2. [`pyin`] tracks a whole utterance at once, for scoring.
 
 pub mod mpm;
+pub mod pyin;
 pub mod smooth;
 pub mod yin;
 
@@ -28,6 +29,33 @@ pub const PITCH_RATE: f64 = 16_000.0;
 pub(crate) fn octave_up_error(chosen_nsdf: f64, double_nsdf: f64) -> bool {
     let (chosen, double) = (1.0 - chosen_nsdf, 1.0 - double_nsdf);
     chosen > 0.02 && double < 0.25 * chosen
+}
+
+/// The octave-up guard applied to every multiple of the chosen lag `tau`.
+///
+/// A single strong harmonic (for example H4 on F1 in a man's /ɝ/, or a
+/// band-limited phone channel) makes 1/k of the period look periodic, not
+/// only 1/2 (decision D11). For k = 2, 3, … while k·τ is in range, `near`
+/// returns the best candidate lag within ±10% of k·τ and its NSDF; the
+/// first that passes [`octave_up_error`] against τ's NSDF wins. Taking the
+/// first rather than the best keeps a slightly cleaner sub-harmonic (2T)
+/// from beating the true period T.
+pub(crate) fn period_multiple(
+    tau: usize,
+    max: usize,
+    chosen_nsdf: f64,
+    mut near: impl FnMut(usize, usize) -> Option<(usize, f64)>,
+) -> usize {
+    let mut k = 2;
+    while k * tau * 9 / 10 <= max {
+        if let Some((u, nsdf)) = near(k * tau * 9 / 10, (k * tau * 11 / 10).min(max))
+            && octave_up_error(chosen_nsdf, nsdf)
+        {
+            return u;
+        }
+        k += 1;
+    }
+    tau
 }
 
 /// Normalised square difference of `x` at lag `tau`, over the whole frame.
@@ -73,6 +101,10 @@ pub enum PitchAlgorithm {
     Yin,
     /// MPM (McLeod & Wyvill 2005): normalised square difference.
     Mpm,
+    /// pYIN (Mauch & Dixon 2014): YIN candidates decoded with an HMM over
+    /// the whole utterance. Finished recordings only: it needs look-ahead,
+    /// so [`crate::StreamAnalyser`] rejects it.
+    Pyin,
 }
 
 /// One frame's pitch estimate.

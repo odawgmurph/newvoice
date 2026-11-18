@@ -10,6 +10,7 @@
 use std::collections::VecDeque;
 
 use crate::formant::{FormantAnalyser, FormantConfig, FormantFrame};
+use crate::pitch::pyin::{self, PyinConfig};
 use crate::pitch::smooth::{SmoothConfig, smooth, smooth_window};
 use crate::pitch::{LagRange, PITCH_RATE, PitchAlgorithm, mpm, yin};
 use crate::quality::spectral::{FrameSpectral, SpectralAnalyser};
@@ -34,7 +35,11 @@ pub struct Config {
     pub voicing_threshold: f64,
     /// Frames quieter than this (dB re a full-scale sine) are silence.
     pub silence_dbfs: f64,
+    /// Jump guard and median filter for YIN and MPM tracks. pYIN's HMM does
+    /// this job, so its track is not smoothed again.
     pub smoothing: SmoothConfig,
+    /// pYIN settings, used when `pitch_algorithm` is [`PitchAlgorithm::Pyin`].
+    pub pyin: PyinConfig,
     /// Per-frame formants, or `None` to skip them (pitch only).
     pub formants: Option<FormantConfig>,
     /// Streaming only: frames of look-ahead before a frame is emitted. It
@@ -55,6 +60,7 @@ impl Default for Config {
             voicing_threshold: 0.7,
             silence_dbfs: -60.0,
             smoothing: SmoothConfig::default(),
+            pyin: PyinConfig::default(),
             formants: Some(FormantConfig::default()),
             lookahead_frames: 5,
         }
@@ -74,16 +80,19 @@ pub struct Frame {
     pub periodicity: f64,
     /// Above the silence gate and at least `voicing_threshold` periodic.
     pub voiced: bool,
-    /// The frame's own F0 estimate, when voiced.
+    /// The frame's own F0 estimate, when voiced. With pYIN, the most
+    /// probable candidate.
     pub f0_raw_hz: Option<f64>,
-    /// F0 after the jump guard and median filter. `None` when unvoiced or
-    /// rejected as an octave jump; this is the value to show and score.
+    /// F0 after the jump guard and median filter (YIN, MPM) or HMM decoding
+    /// (pYIN). `None` when unvoiced or rejected as an octave jump; this is
+    /// the value to show and score.
     pub f0_hz: Option<f64>,
     /// Formants, when enabled. Empty below the silence gate. Present for
     /// unvoiced frames too, since whispered vowels have formants.
     pub formants: Option<FormantFrame>,
-    /// How far to trust F1/F2 here, 0–1. **Provisional heuristic**, to be
-    /// calibrated against the harness's error-vs-F0 measurements.
+    /// How far to trust F1/F2 here, 0–1: roughly the chance both are within
+    /// 10%, fitted on real vowels (see `formant_confidence`). The fit used
+    /// steady-state medians; a single frame's bandwidths are noisier.
     pub formant_confidence: f64,
     /// Spectral voice-quality measures (H1–H2, alpha ratio, …), on frames
     /// with an F0 (`f0_hz` is `Some`) only.
@@ -122,13 +131,36 @@ pub fn analyse(samples: &[f32], sample_rate: f64, cfg: &Config) -> Analysis {
             .unwrap_or(0.0)
     };
     let n = frame_count(samples.len() as i64, sample_rate, cfg.hop_s);
-    let raws: Vec<RawFrame> = (0..n).map(|k| fa.analyse(src, k)).collect();
-    let f0: Vec<Option<f64>> = raws.iter().map(|r| r.f0_hz).collect();
-    let frames = raws
-        .iter()
-        .zip(smooth(&f0, &cfg.smoothing))
-        .map(|(raw, f0)| raw.finish(f0))
-        .collect();
+    let frames = if cfg.pitch_algorithm == PitchAlgorithm::Pyin {
+        // Pass 1: candidates for every frame. Then decode the whole track,
+        // and pass 2 measures everything else at the decoded F0.
+        let mut observer = pyin::Observer::new(fa.lags, &cfg.pyin);
+        let obs: Vec<pyin::Observation> = (0..n)
+            .map(|k| fa.observe_pyin(src, k, &mut observer))
+            .collect();
+        let decoded = pyin::decode(&obs, cfg.f0_min_hz, cfg.f0_max_hz, cfg.hop_s, &cfg.pyin);
+        (0..n)
+            .zip(obs.iter().zip(&decoded))
+            .map(|(k, (o, d))| {
+                let best = o.best();
+                let pitch = Pitch {
+                    periodicity: best.map_or(0.0, |c| c.periodicity),
+                    voiced: d.f0_hz.is_some(),
+                    raw_f0_hz: best.filter(|_| d.f0_hz.is_some()).map(|c| c.f0_hz),
+                    f0_hz: d.f0_hz,
+                };
+                let raw = fa.analyse(src, k, Some(pitch));
+                raw.finish(raw.f0_hz)
+            })
+            .collect()
+    } else {
+        let raws: Vec<RawFrame> = (0..n).map(|k| fa.analyse(src, k, None)).collect();
+        let f0: Vec<Option<f64>> = raws.iter().map(|r| r.f0_hz).collect();
+        raws.iter()
+            .zip(smooth(&f0, &cfg.smoothing))
+            .map(|(raw, f0)| raw.finish(f0))
+            .collect()
+    };
     Analysis {
         sample_rate,
         duration_s: samples.len() as f64 / sample_rate,
@@ -163,7 +195,13 @@ pub struct StreamAnalyser {
 }
 
 impl StreamAnalyser {
+    /// Panics for [`PitchAlgorithm::Pyin`], which needs the whole
+    /// utterance: use [`analyse`] on the finished recording instead.
     pub fn new(sample_rate: f64, cfg: Config) -> Self {
+        assert!(
+            cfg.pitch_algorithm != PitchAlgorithm::Pyin,
+            "pYIN needs the whole utterance; use analyse()"
+        );
         let fa = FrameAnalyser::new(&cfg, sample_rate);
         let radius = cfg.smoothing.median_frames / 2;
         Self {
@@ -250,7 +288,7 @@ impl StreamAnalyser {
                 0.0
             }
         };
-        let raw = self.fa.analyse(src, self.next_analyse);
+        let raw = self.fa.analyse(src, self.next_analyse, None);
         self.raws.push_back(raw);
         self.next_analyse += 1;
     }
@@ -302,9 +340,21 @@ struct RawFrame {
     level_dbfs: f64,
     periodicity: f64,
     voiced: bool,
+    /// The frame's own estimate (`Frame::f0_raw_hz`).
+    raw_f0_hz: Option<f64>,
+    /// The track value before YIN/MPM smoothing; for pYIN, already final.
     f0_hz: Option<f64>,
     formants: Option<FormantFrame>,
     spectral: Option<FrameSpectral>,
+}
+
+/// A pitch decision made outside the frame (pYIN's decoded track).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Pitch {
+    periodicity: f64,
+    voiced: bool,
+    raw_f0_hz: Option<f64>,
+    f0_hz: Option<f64>,
 }
 
 impl RawFrame {
@@ -315,7 +365,7 @@ impl RawFrame {
             level_dbfs: self.level_dbfs,
             periodicity: self.periodicity,
             voiced: self.voiced,
-            f0_raw_hz: self.f0_hz,
+            f0_raw_hz: self.raw_f0_hz,
             f0_hz,
             formants: self.formants,
             formant_confidence: self.formants.map_or(0.0, |fr| {
@@ -330,13 +380,17 @@ impl RawFrame {
     }
 }
 
-/// Provisional formant confidence from F0 and the F1/F2 bandwidths.
+/// Formant confidence from F0 and the F1/F2 bandwidths: roughly the chance
+/// that F1 and F2 are both within 10% of a hand-checked measurement.
 ///
-/// Harmonics thin out as F0 rises, so LPC peaks snap to them (handbook §3.3):
-/// full trust up to 200 Hz, falling linearly to 0.2 at 400 Hz. Unvoiced
-/// frames above the gate (whisper, or noise) get 0.5. Bandwidths over 300 Hz
-/// reduce trust, reaching 0 at 1000 Hz. To be replaced by a curve fitted to
-/// the harness's measured error versus F0.
+/// The bandwidth term is a logistic fit to the Hillenbrand (1995) vowels
+/// measured at their judged steady state (decision D11): with B the wider of
+/// the F1/F2 bandwidths, P(error > 10%) = 1 / (1 + exp(4.56 − 0.898·B/100)),
+/// about 2% at 100 Hz, 13% at 300 Hz and 70% at 600 Hz. F0 barely mattered
+/// for those adult voices (up to ~300 Hz), but the synthetic corpus shows
+/// LPC snapping to harmonics from 250 Hz (handbook §3.3), so the source term
+/// falls linearly from 1 at 250 Hz to 0.3 at 400 Hz. Unvoiced frames above
+/// the gate (whisper, or noise) get 0.5: nothing has calibrated them yet.
 pub(crate) fn formant_confidence(
     f0_hz: Option<f64>,
     f1_bandwidth_hz: Option<f64>,
@@ -345,9 +399,9 @@ pub(crate) fn formant_confidence(
     let (Some(b1), Some(b2)) = (f1_bandwidth_hz, f2_bandwidth_hz) else {
         return 0.0;
     };
-    let source = f0_hz.map_or(0.5, |f0| (1.0 - 0.8 * (f0 - 200.0) / 200.0).clamp(0.2, 1.0));
-    let sharp = |b: f64| (1.0 - (b - 300.0) / 700.0).clamp(0.0, 1.0);
-    source * sharp(b1).min(sharp(b2))
+    let source = f0_hz.map_or(0.5, |f0| (1.0 - 0.7 * (f0 - 250.0) / 150.0).clamp(0.3, 1.0));
+    let p_error = 1.0 / (1.0 + (4.56 - 0.898 * b1.max(b2) / 100.0).exp());
+    source * (1.0 - p_error)
 }
 
 /// The per-frame work shared by batch and streaming analysis.
@@ -392,7 +446,8 @@ impl FrameAnalyser {
             .map_or(pitch, |f| pitch.max(f.reach_s()))
     }
 
-    fn analyse(&mut self, src: impl Fn(i64) -> f32 + Copy, index: u64) -> RawFrame {
+    /// Reads frame `index` into `buf` and returns its level (dBFS).
+    fn read(&mut self, src: impl Fn(i64) -> f32 + Copy, index: u64) -> f64 {
         let t = index as f64 * self.cfg.hop_s;
         let n = self.lags.frame_len();
         self.buf.clear();
@@ -401,26 +456,61 @@ impl FrameAnalyser {
         let start = (t * PITCH_RATE - (n as f64 - 1.0) / 2.0).round() as i64;
         self.resampler.read(src, start, &mut self.buf);
         self.resampler.forget_before(start);
-
         let mean_square = self.buf.iter().map(|v| v * v).sum::<f64>() / n as f64;
-        let level_dbfs = 10.0 * (2.0 * mean_square).max(1e-15).log10();
+        10.0 * (2.0 * mean_square).max(1e-15).log10()
+    }
+
+    /// pYIN's first pass: the frame's F0 candidates (none below the gate).
+    fn observe_pyin(
+        &mut self,
+        src: impl Fn(i64) -> f32 + Copy,
+        index: u64,
+        observer: &mut pyin::Observer,
+    ) -> pyin::Observation {
+        if self.read(src, index) >= self.cfg.silence_dbfs {
+            observer.observe(&self.buf)
+        } else {
+            pyin::Observation::default()
+        }
+    }
+
+    /// Measures frame `index`. The pitch comes from the frame's own YIN or
+    /// MPM estimate, or from `pitch` when given (pYIN).
+    fn analyse(
+        &mut self,
+        src: impl Fn(i64) -> f32 + Copy,
+        index: u64,
+        pitch: Option<Pitch>,
+    ) -> RawFrame {
+        let t = index as f64 * self.cfg.hop_s;
+        let level_dbfs = self.read(src, index);
         let audible = level_dbfs >= self.cfg.silence_dbfs;
 
-        let estimate = audible
-            .then(|| match self.cfg.pitch_algorithm {
-                PitchAlgorithm::Yin => yin::estimate(
-                    &self.buf,
-                    &self.lags,
-                    self.cfg.yin_threshold,
-                    &mut self.scratch,
-                ),
-                PitchAlgorithm::Mpm => {
-                    mpm::estimate(&self.buf, &self.lags, self.cfg.mpm_k, &mut self.scratch)
-                }
-            })
-            .flatten();
-        let periodicity = estimate.map_or(0.0, |e| e.periodicity);
-        let voiced = periodicity >= self.cfg.voicing_threshold;
+        let pitch = pitch.unwrap_or_else(|| {
+            let estimate = audible
+                .then(|| match self.cfg.pitch_algorithm {
+                    PitchAlgorithm::Yin => yin::estimate(
+                        &self.buf,
+                        &self.lags,
+                        self.cfg.yin_threshold,
+                        &mut self.scratch,
+                    ),
+                    PitchAlgorithm::Mpm => {
+                        mpm::estimate(&self.buf, &self.lags, self.cfg.mpm_k, &mut self.scratch)
+                    }
+                    PitchAlgorithm::Pyin => unreachable!("pYIN pitch is decoded per utterance"),
+                })
+                .flatten();
+            let periodicity = estimate.map_or(0.0, |e| e.periodicity);
+            let voiced = periodicity >= self.cfg.voicing_threshold;
+            let f0_hz = estimate.filter(|_| voiced).map(|e| e.f0_hz);
+            Pitch {
+                periodicity,
+                voiced,
+                raw_f0_hz: f0_hz,
+                f0_hz,
+            }
+        });
         let formants = self.formants.as_mut().map(|fa| {
             if audible {
                 fa.analyse(src, t)
@@ -428,8 +518,7 @@ impl FrameAnalyser {
                 FormantFrame::default()
             }
         });
-        let f0_hz = estimate.filter(|_| voiced).map(|e| e.f0_hz);
-        let spectral = f0_hz.map(|f0| {
+        let spectral = pitch.f0_hz.map(|f0| {
             self.spectral
                 .analyse(&self.buf, f0, formants.as_ref().filter(|f| f.len() >= 2))
         });
@@ -437,9 +526,10 @@ impl FrameAnalyser {
             index,
             time_s: t,
             level_dbfs,
-            periodicity,
-            voiced,
-            f0_hz,
+            periodicity: pitch.periodicity,
+            voiced: pitch.voiced,
+            raw_f0_hz: pitch.raw_f0_hz,
+            f0_hz: pitch.f0_hz,
             formants,
             spectral,
         }
@@ -530,6 +620,45 @@ mod tests {
     }
 
     #[test]
+    fn pyin_tracks_the_glide_and_gates_silence() {
+        let x = utterance();
+        let a = analyse(
+            &x,
+            RATE,
+            &Config {
+                pitch_algorithm: PitchAlgorithm::Pyin,
+                ..Config::default()
+            },
+        );
+        assert_eq!(a.frames.len(), 161);
+        for f in &a.frames {
+            if f.time_s < 0.27 || f.time_s > 1.33 {
+                assert!(!f.voiced && f.f0_hz.is_none(), "t={} {f:?}", f.time_s);
+            }
+            if (0.35..1.25).contains(&f.time_s) {
+                let truth = 150.0 * 2f64.powf((f.time_s - 0.3) * 7.0 / 12.0);
+                let got = f.f0_hz.expect("voiced");
+                assert!(
+                    (got / truth - 1.0).abs() < 0.01,
+                    "t={} {got} vs {truth}",
+                    f.time_s
+                );
+                assert!(f.spectral.is_some() && f.formants.is_some());
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "whole utterance")]
+    fn pyin_cannot_stream() {
+        let cfg = Config {
+            pitch_algorithm: PitchAlgorithm::Pyin,
+            ..Config::default()
+        };
+        StreamAnalyser::new(RATE, cfg);
+    }
+
+    #[test]
     fn streaming_matches_batch_for_any_chunking() {
         let x = utterance();
         let cfg = Config::default();
@@ -574,10 +703,13 @@ mod tests {
     #[test]
     fn confidence_falls_with_f0_and_bandwidth() {
         let c = |f0, b| formant_confidence(f0, Some(b), Some(b));
-        assert_eq!(c(Some(150.0), 100.0), 1.0);
-        assert!(c(Some(300.0), 100.0) < c(Some(200.0), 100.0));
+        assert!((c(Some(150.0), 100.0) - 0.975).abs() < 0.005);
+        assert_eq!(c(Some(150.0), 100.0), c(Some(250.0), 100.0));
+        assert!(c(Some(300.0), 100.0) < c(Some(250.0), 100.0));
+        assert!((c(Some(500.0), 100.0) / c(Some(150.0), 100.0) - 0.3).abs() < 1e-9);
+        assert!(c(Some(150.0), 600.0) < 0.35);
         assert!(c(Some(150.0), 800.0) < c(Some(150.0), 200.0));
-        assert_eq!(c(None, 100.0), 0.5);
+        assert!((c(None, 100.0) / c(Some(150.0), 100.0) - 0.5).abs() < 1e-9);
         assert_eq!(formant_confidence(Some(150.0), Some(100.0), None), 0.0);
     }
 }

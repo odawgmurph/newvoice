@@ -63,18 +63,16 @@ pub fn estimate(
     let highest = peaks.iter().map(|&p| nsdf[p]).fold(f64::MIN, f64::max);
     let mut chosen = *peaks.iter().find(|&&p| nsdf[p] >= k * highest)?;
 
-    // Octave-up guard (see `super::octave_up_error`).
-    if let Some(&double) = peaks
-        .iter()
-        .filter(|&&p| p >= 2 * chosen * 9 / 10 && p <= 2 * chosen * 11 / 10)
-        .max_by(|&&a, &&b| nsdf[a].total_cmp(&nsdf[b]))
-        && super::octave_up_error(
-            parabolic(nsdf[chosen - 1], nsdf[chosen], nsdf[chosen + 1]).1,
-            parabolic(nsdf[double - 1], nsdf[double], nsdf[double + 1]).1,
-        )
-    {
-        chosen = double;
-    }
+    // Octave-up guard (see `super::period_multiple`).
+    let value_at = |p: usize| parabolic(nsdf[p - 1], nsdf[p], nsdf[p + 1]).1;
+    chosen = super::period_multiple(chosen, lags.max, value_at(chosen), |lo, hi| {
+        peaks
+            .iter()
+            .copied()
+            .filter(|&p| p >= lo && p <= hi)
+            .max_by(|&a, &b| nsdf[a].total_cmp(&nsdf[b]))
+            .map(|p| (p, value_at(p)))
+    });
 
     let (delta, value) = parabolic(nsdf[chosen - 1], nsdf[chosen], nsdf[chosen + 1]);
     Some(PitchEstimate {
@@ -113,6 +111,23 @@ mod tests {
                 let t = i as f64 / PITCH_RATE;
                 let w = 2.0 * std::f64::consts::PI * f0 * t;
                 0.05 * w.sin() + 0.4 * (2.0 * w).sin() + 0.03 * (3.0 * w).sin()
+            })
+            .collect();
+        let e = run(&x).unwrap();
+        assert!((e.f0_hz / f0 - 1.0).abs() < 2e-3, "got {}", e.f0_hz);
+    }
+
+    #[test]
+    fn a_dominant_fourth_harmonic_does_not_quadruple_f0() {
+        let f0 = 117.0;
+        let amps = [0.05, 0.1, 0.3, 1.2, 0.1, 0.07];
+        let x: Vec<f64> = (0..2000)
+            .map(|i| {
+                let w = 2.0 * std::f64::consts::PI * f0 * i as f64 / PITCH_RATE;
+                amps.iter()
+                    .enumerate()
+                    .map(|(k, a)| a * ((k + 1) as f64 * w).sin())
+                    .sum()
             })
             .collect();
         let e = run(&x).unwrap();
