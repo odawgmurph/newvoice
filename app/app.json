@@ -5,9 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.newvoice.spike",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "NewVoice listens to your voice to show pitch and resonance. Audio is analysed on this phone and never leaves it."
+      }
     },
     "android": {
       "adaptiveIcon": {

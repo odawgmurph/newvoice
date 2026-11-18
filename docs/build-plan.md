@@ -16,7 +16,7 @@ The order follows the tech-stack doc: **risky DSP first → prove capture on rea
 |---|---|---|
 | 0 Foundations | Done | Expo/React Native chosen (D1). No advisors for now, so safety limits are fixed in code (D2). Norms come from raw data (D6). CI builds every target (D7). |
 | 1 Analysis core + Praat harness | Done | Exit criteria met, except low-end ARM timing, which moved to Stage 2 (needs the device matrix). Evidence: [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md) and [`validation/stage1-real.md`](validation/stage1-real.md); decisions D8–D11. |
-| 2 Capture spike | Next | |
+| 2 Capture spike | In progress | iOS first (D12): measurement-mode capture into the Rust core, live pitch trace + F2, capability and latency diagnostics, unsigned `.ipa` for AltStore ([`install-iphone.md`](install-iphone.md)). Android capture, the device matrix and the go/no-go are still to come. |
 
 **Stage 1, as built:**
 - YIN/MPM live and pYIN for recordings.
