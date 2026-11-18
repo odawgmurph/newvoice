@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from validation import core, corpus, praat
+from validation import core, corpus, praat, resonance
 from validation.measure import (
     compare_pitch,
     group_ceiling,
@@ -28,6 +28,7 @@ from validation.measure import (
 from validation.vtl import avtl_cm
 
 OUTPUT = corpus.REPO_ROOT / "docs" / "validation" / "stage1-synthetic.md"
+ALGORITHMS = ("yin", "mpm", "pyin")
 OTHER_CEILING_HZ = {"men": 5500.0, "women": 5000.0}
 
 
@@ -49,20 +50,20 @@ def pitch_section() -> str:
     rows = []
     for case in corpus.pitch_cases():
         row = [f"`{case.name}`"]
-        for algorithm in ("yin", "mpm"):
+        for algorithm in ALGORITHMS:
             c = compare_pitch(case, algorithm)
             p, t = c.error_vs_praat(), c.error_vs_truth()
             row += [pct2(np.median(p)), pct2(p.max()), pct2(t.max())]
         rows.append(row)
     header = ["Signal"] + [
         f"{a} {m}"
-        for a in ("YIN", "MPM")
+        for a in ("YIN", "MPM", "pYIN")
         for m in ("median vs Praat", "max vs Praat", "max vs truth")
     ]
     traps = []
     for case in corpus.octave_trap_cases():
         row = [f"`{case.name}`"]
-        for algorithm in ("yin", "mpm"):
+        for algorithm in ALGORITHMS:
             c = compare_pitch(case, algorithm)
             voiced = c.inner & ~np.isnan(c.ours)
             err = np.abs(c.ours[voiced] / c.truth[voiced] - 1)
@@ -78,7 +79,8 @@ def pitch_section() -> str:
         + "\n\n### Octave traps\n\n"
         "Signals that provoke octave errors: a weak fundamental with H2 on F1 "
         "(H1 18 dB below H2), which made both estimators read an octave high "
-        "until the octave-up guard was added, and per-cycle jitter, which can "
+        "until the octave-up guard was added (now generalised to every multiple "
+        "of the period, decision D11), and per-cycle jitter, which can "
         "produce sub-harmonics. Share (%) of inner frames that are voiced, and "
         "of voiced frames within 5% of the true F0. The gate is 95% voiced and "
         "99% within 5%.\n\n"
@@ -89,6 +91,8 @@ def pitch_section() -> str:
                 "YIN within 5%",
                 "MPM voiced",
                 "MPM within 5%",
+                "pYIN voiced",
+                "pYIN within 5%",
                 "Praat within 5%",
             ],
             traps,
@@ -169,8 +173,8 @@ def formant_section() -> str:
         )
     )
     out.append(
-        "\nEach cell is median–worst for F1 / F2 / F3. Confidence is the provisional "
-        "heuristic in `analysis::formant_confidence`.\n"
+        "\nEach cell is median–worst for F1 / F2 / F3. Confidence is "
+        "`analysis::formant_confidence`, fitted on real vowels (see `stage1-real.md`).\n"
     )
     out.append("### Apparent vocal tract length\n")
     out.append(
@@ -297,6 +301,42 @@ def quality_section() -> str:
     return "\n".join(out)
 
 
+def resonance_section() -> str:
+    f0s = corpus.GATED_F0_HZ + corpus.HIGH_F0_HZ
+    errors: dict[float, list[float]] = defaultdict(list)
+    for case in corpus.formant_cases(f0s):
+        m = ours_vowel(case, "--vowel", case.vowel)
+        truth = resonance.score([(case.vowel, case.formants)])
+        errors[case.f0_start].append(m["resonance"]["score"] - truth)
+    rows = []
+    for f0 in f0s:
+        e = np.array(errors[f0])
+        rows.append(
+            [
+                f"{f0:.0f}",
+                f"{np.median(np.abs(e)):.2f}",
+                f"{np.abs(e).max():.2f}",
+                f"{np.median(e):+.2f}",
+                "gated" if f0 in corpus.GATED_F0_HZ else "reported",
+            ]
+        )
+    return (
+        "## Resonance score\n\n"
+        "The vowel-normalised resonance score (handbook §3.3; 0 = men's mean, "
+        "1 = women's) of each synthetic vowel from its sustained-vowel "
+        "measurement, against the score of its true formants. The core's "
+        "per-formant positions equal an independent Python implementation of the "
+        "formula on the committed norms (to 1e-6) for every vowel. The score "
+        "magnifies formant error: a 5% F2 error moves a vowel whose groups "
+        "differ by 18% by about 0.3. Gates (F0 ≤ 250 Hz): every token within "
+        "0.3, and the median over a group's vowels at each F0 within 0.1.\n\n"
+        + table(
+            ["F0 (Hz)", "Median abs. error", "Max abs. error", "Median error", ""],
+            rows,
+        )
+    )
+
+
 def realtime_section() -> str:
     case = corpus.vowel_case("women", "ae", 200.0, rate=48_000, seconds=3.0)
     r = core.on_case(case, "bench", "--chunk", "480", "--repeat", "5")
@@ -322,10 +362,10 @@ def realtime_section() -> str:
 
 LIMITATIONS = """## Known limitations
 
-- **Synthetic audio only.** These vowels come from a harmonic source and Klatt
+- **Synthetic audio.** These vowels come from a harmonic source and Klatt
   resonators, which is cleaner than speech. Real recordings (Hillenbrand
-  tokens, VCTK, LibriSpeech) and codec/noise degradations are still to be
-  added to the corpus.
+  vowels and LibriSpeech, clean and degraded) are in
+  [`stage1-real.md`](stage1-real.md).
 - **F1 at high F0.** From about 200 Hz up, F1 error grows as LPC peaks snap
   to the sparse harmonics, for Praat and newvoice-core alike. Formant
   readouts must be confidence-gated there (handbook §3.3).
@@ -333,8 +373,9 @@ LIMITATIONS = """## Known limitations
   unreliable on /ɝ/ (see its row above). Baseline aVTL uses /a i u/ instead.
 - **The sweep above 300 Hz** occasionally picks a ceiling that misses F2.
   Confidence is already low there.
-- **Formant confidence is provisional.** It is a hand-set heuristic, to be
-  fitted to these error measurements and to real recordings.
+- **Formant confidence above 300 Hz** rests on the synthetic error curve
+  only; the real vowels it was fitted on (`stage1-real.md`) are adult
+  voices up to about 300 Hz.
 - **H1*−H2* near F1.** When H1 or H2 sits on F1 (for example /i/ or /u/ at
   higher F0), the Iseli–Alwan correction can be several dB off. Within one
   vowel, changes are still tracked; compare a user only with their own
@@ -360,6 +401,7 @@ def main() -> int:
         "comparisons gate CI in `harness/tests/test_golden_*.py`.\n",
         pitch_section(),
         formant_section(),
+        resonance_section(),
         quality_section(),
         realtime_section(),
         LIMITATIONS,

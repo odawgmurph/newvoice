@@ -14,40 +14,11 @@ pub fn estimate(
     threshold: f64,
     scratch: &mut Vec<f64>,
 ) -> Option<PitchEstimate> {
-    let LagRange { min, max, window } = *lags;
-    assert!(x.len() >= lags.frame_len(), "frame too short");
-    let top = max + 1; // one lag past the range, for interpolation
-    scratch.clear();
-    scratch.resize(2 * (top + 1), 0.0);
-    let (diff, d) = scratch.split_at_mut(top + 1);
-
-    // Difference function d(τ) = Σ_{j<W} (x_{s+j} − x_{s+j+τ})², with the
-    // compared span [s, s + W + τ) centred in the frame for every lag. (The
-    // textbook s = 0 puts short lags early in the frame, which skews the
-    // estimate in time and biases it on glides.)
-    for (tau, dt) in diff.iter_mut().enumerate().skip(1) {
-        let s = (top - tau) / 2;
-        *dt = x[s..s + window]
-            .iter()
-            .zip(&x[s + tau..s + tau + window])
-            .map(|(a, b)| (a - b) * (a - b))
-            .sum();
-    }
-    if diff[1..].iter().all(|&v| v == 0.0) {
+    let LagRange { min, max, .. } = *lags;
+    if !difference(x, lags, scratch) {
         return None; // silence (or DC)
     }
-
-    // Cumulative mean normalised difference.
-    d[0] = 1.0;
-    let mut running = 0.0;
-    for tau in 1..=top {
-        running += diff[tau];
-        d[tau] = if running > 0.0 {
-            diff[tau] * tau as f64 / running
-        } else {
-            1.0
-        };
-    }
+    let (diff, d) = scratch.split_at(max + 2);
 
     // The textbook rule: the first dip below the threshold (descending to
     // its bottom), else the deepest dip.
@@ -69,19 +40,17 @@ pub fn estimate(
             .expect("non-empty lag range")
     });
 
-    // Octave-up guard: if a dip near the double period is much more periodic,
-    // the first dip was the half period of a voice whose H2 dominates.
-    let near_double = (2 * tau * 9 / 10).max(min)..=(2 * tau * 11 / 10).min(max);
-    if let Some(double) = near_double
-        .filter(|&t| d[t] < d[t - 1] && d[t] <= d[t + 1])
-        .min_by(|&a, &b| d[a].total_cmp(&d[b]))
-        && super::octave_up_error(
-            super::nsdf_peak(&x[..lags.frame_len()], tau),
-            super::nsdf_peak(&x[..lags.frame_len()], double),
-        )
-    {
-        tau = double;
-    }
+    // Octave-up guard: if a dip near a multiple of the period is much more
+    // periodic, the first dip was a fraction of the period of a voice whose
+    // H2 (or another single harmonic) dominates.
+    let frame = &x[..lags.frame_len()];
+    let chosen_nsdf = super::nsdf_peak(frame, tau);
+    tau = super::period_multiple(tau, max, chosen_nsdf, |lo, hi| {
+        (lo.max(min)..=hi)
+            .filter(|&t| d[t] < d[t - 1] && d[t] <= d[t + 1])
+            .min_by(|&a, &b| d[a].total_cmp(&d[b]))
+            .map(|t| (t, super::nsdf_peak(frame, t)))
+    });
 
     // Refine the period on the raw difference function, which (unlike the
     // normalised one) has no lag-dependent weighting to bias the vertex.
@@ -91,6 +60,47 @@ pub fn estimate(
         f0_hz: PITCH_RATE / (tau as f64 + delta),
         periodicity: (1.0 - value).clamp(0.0, 1.0),
     })
+}
+
+/// Fills `scratch` with YIN's difference function followed by its cumulative
+/// mean normalised form, each `lags.max + 2` long (lags 0 to one past the
+/// range, for interpolation). Returns false for a silent (or DC) frame.
+pub(crate) fn difference(x: &[f64], lags: &LagRange, scratch: &mut Vec<f64>) -> bool {
+    let LagRange { max, window, .. } = *lags;
+    assert!(x.len() >= lags.frame_len(), "frame too short");
+    let top = max + 1; // one lag past the range, for interpolation
+    scratch.clear();
+    scratch.resize(2 * (top + 1), 0.0);
+    let (diff, d) = scratch.split_at_mut(top + 1);
+
+    // Difference function d(τ) = Σ_{j<W} (x_{s+j} − x_{s+j+τ})², with the
+    // compared span [s, s + W + τ) centred in the frame for every lag. (The
+    // textbook s = 0 puts short lags early in the frame, which skews the
+    // estimate in time and biases it on glides.)
+    for (tau, dt) in diff.iter_mut().enumerate().skip(1) {
+        let s = (top - tau) / 2;
+        *dt = x[s..s + window]
+            .iter()
+            .zip(&x[s + tau..s + tau + window])
+            .map(|(a, b)| (a - b) * (a - b))
+            .sum();
+    }
+    if diff[1..].iter().all(|&v| v == 0.0) {
+        return false;
+    }
+
+    // Cumulative mean normalised difference.
+    d[0] = 1.0;
+    let mut running = 0.0;
+    for tau in 1..=top {
+        running += diff[tau];
+        d[tau] = if running > 0.0 {
+            diff[tau] * tau as f64 / running
+        } else {
+            1.0
+        };
+    }
+    true
 }
 
 #[cfg(test)]
@@ -128,6 +138,24 @@ mod tests {
                 let t = i as f64 / PITCH_RATE;
                 let w = 2.0 * std::f64::consts::PI * f0 * t;
                 0.05 * w.sin() + 0.4 * (2.0 * w).sin() + 0.03 * (3.0 * w).sin()
+            })
+            .collect();
+        let e = run(&x).unwrap();
+        assert!((e.f0_hz / f0 - 1.0).abs() < 2e-3, "got {}", e.f0_hz);
+    }
+
+    #[test]
+    fn a_dominant_fourth_harmonic_does_not_quadruple_f0() {
+        // H4 on F1, as in a man's /ɝ/: 12 dB above H3, more above H1.
+        let f0 = 117.0;
+        let amps = [0.05, 0.1, 0.3, 1.2, 0.1, 0.07];
+        let x: Vec<f64> = (0..2000)
+            .map(|i| {
+                let w = 2.0 * std::f64::consts::PI * f0 * i as f64 / PITCH_RATE;
+                amps.iter()
+                    .enumerate()
+                    .map(|(k, a)| a * ((k + 1) as f64 * w).sin())
+                    .sum()
             })
             .collect();
         let e = run(&x).unwrap();

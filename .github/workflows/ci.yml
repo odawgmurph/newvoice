@@ -98,6 +98,18 @@ jobs:
         with:
           workspaces: core
           key: harness
+      # Downloads pinned by SHA-256 (Hillenbrand vowel recordings and data),
+      # kept between runs so the tests don't depend on the mirrors every time.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            harness/.cache/h95-alldata.zip
+            harness/.cache/vowdata.dat
+          key: harness-downloads-2560548591e3-05a4a69e2c6b
+      # tests/test_wasm.py runs the WASI build of newvoice-cli under Node.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - run: uv run ruff check .
@@ -105,6 +117,8 @@ jobs:
       - run: uv run pytest
       - name: Reference norms are up to date
         run: uv run python -m norms.build_norms --check
+      - name: LibriSpeech subset is intact
+        run: uv run python -m corpus.build_librispeech --check
 
   app:
     name: App (typecheck)

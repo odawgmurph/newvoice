@@ -12,6 +12,14 @@ content/norms/reference_norms.json contains statistics derived from:
   Hillenbrand, J., Getty, L. A., Clark, M. J., & Wheeler, K. (1995).
   Acoustic characteristics of American English vowels. JASA 97(5), 3099-3111.
   Vowel data (c) 1995 James Hillenbrand. The raw data is not redistributed.
+core/newvoice-core/src/reference_norms.rs is generated from the same statistics.
+
+harness/corpus/librispeech/ contains 20 unmodified utterances from
+LibriSpeech dev-clean, used as validation test data only (not shipped):
+  Panayotov, V., Chen, G., Povey, D., & Khudanpur, S. (2015). LibriSpeech:
+  an ASR corpus based on public domain audio books. ICASSP 2015.
+  Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/);
+  source https://www.openslr.org/12/.
 
 ----------------------------------------------------------------------------
 THE MARGARITA CLAUSE (Beerware-style)

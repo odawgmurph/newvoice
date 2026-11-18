@@ -10,7 +10,9 @@ pub mod lpc;
 pub mod numeric;
 pub mod pitch;
 pub mod quality;
+pub mod reference_norms;
 pub mod resample;
+pub mod resonance;
 pub mod roots;
 pub mod units;
 pub mod vowel;
@@ -18,7 +20,8 @@ pub mod vtl;
 
 pub use analysis::{Analysis, Config, Frame, StreamAnalyser, analyse};
 pub use quality::{QualityConfig, VoiceQuality, measure_quality};
-pub use vowel::{VowelConfig, VowelMeasurement, measure_vowel};
+pub use resonance::{ResonanceScore, VowelNorm, VowelToken, resonance_score};
+pub use vowel::{VowelConfig, VowelMeasurement, measure_vowel, measure_vowel_between};
 
 #[cfg(test)]
 pub(crate) mod testsig;

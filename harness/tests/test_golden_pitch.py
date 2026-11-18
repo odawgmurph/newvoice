@@ -16,7 +16,7 @@ REQUIRED_SHARE = 0.99
 CASES = corpus.pitch_cases()
 
 
-@pytest.mark.parametrize("algorithm", ["yin", "mpm"])
+@pytest.mark.parametrize("algorithm", ["yin", "mpm", "pyin"])
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
 def test_f0_matches_praat_and_truth(case, algorithm):
     c = compare_pitch(case, algorithm)
@@ -36,7 +36,7 @@ def test_f0_matches_praat_and_truth(case, algorithm):
 TRAPS = corpus.octave_trap_cases()
 
 
-@pytest.mark.parametrize("algorithm", ["yin", "mpm"])
+@pytest.mark.parametrize("algorithm", ["yin", "mpm", "pyin"])
 @pytest.mark.parametrize("case", TRAPS, ids=[c.name for c in TRAPS])
 def test_no_octave_errors(case, algorithm):
     # A weak fundamental must not read an octave high, and jitter must not

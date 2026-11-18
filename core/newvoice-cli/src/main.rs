@@ -3,9 +3,10 @@
 //! Used by the Python validation harness (`harness/validation`). Not shipped.
 //!
 //! ```text
-//! newvoice-cli frames <wav> [--algorithm yin|mpm] [--ceiling HZ] [--raw-formants] [--no-formants]
-//! newvoice-cli vowel  <wav> [--ceiling HZ]...
-//! newvoice-cli quality <wav> [--algorithm yin|mpm] [--ceiling HZ]
+//! newvoice-cli frames <wav> [--algorithm yin|mpm|pyin] [--ceiling HZ] [--raw-formants] [--no-formants]
+//! newvoice-cli vowel  <wav> [--ceiling HZ]... [--vowel CODE] [--start S --end S] [--max-bandwidth HZ]
+//!                    (CODE adds the resonance score; --start/--end give known boundaries)
+//! newvoice-cli quality <wav> [--algorithm yin|mpm|pyin] [--ceiling HZ]
 //! newvoice-cli hnr    <wav>   (per-frame HNR track)
 //! newvoice-cli cpps   <wav>   (per-frame cepstral peak prominence)
 //! newvoice-cli bench  <wav> [--chunk N] [--repeat N]
@@ -20,7 +21,11 @@ use newvoice_core::quality::cpps::cpps_track;
 use newvoice_core::quality::hnr::hnr_track;
 use newvoice_core::quality::spectral::FrameSpectral;
 use newvoice_core::quality::{QUALITY_VERSION, QualityConfig, quality_with_tracks};
-use newvoice_core::{Config, StreamAnalyser, VowelConfig, analyse, measure_vowel};
+use newvoice_core::resonance::{RESONANCE_SCORE_VERSION, delta_f_position};
+use newvoice_core::{
+    Config, StreamAnalyser, VowelConfig, analyse, measure_vowel, measure_vowel_between,
+};
+use newvoice_core::{VowelNorm, VowelToken, resonance_score};
 use serde_json::{Value, json};
 
 fn main() -> ExitCode {
@@ -69,6 +74,12 @@ struct Options {
     no_formants: bool,
     chunk: usize,
     repeat: usize,
+    vowel: Option<&'static VowelNorm>,
+    median_frames: Option<usize>,
+    median_outlier_st: Option<f64>,
+    start_s: Option<f64>,
+    end_s: Option<f64>,
+    max_bandwidth_hz: Option<f64>,
 }
 
 impl Options {
@@ -86,6 +97,7 @@ impl Options {
                     o.algorithm = match value(a)?.as_str() {
                         "yin" => PitchAlgorithm::Yin,
                         "mpm" => PitchAlgorithm::Mpm,
+                        "pyin" => PitchAlgorithm::Pyin,
                         other => return Err(format!("unknown algorithm {other}")),
                     }
                 }
@@ -94,6 +106,15 @@ impl Options {
                 "--no-formants" => o.no_formants = true,
                 "--chunk" => o.chunk = number(&value(a)?)? as usize,
                 "--repeat" => o.repeat = number(&value(a)?)? as usize,
+                "--median-frames" => o.median_frames = Some(number(&value(a)?)? as usize),
+                "--median-outlier-st" => o.median_outlier_st = Some(number(&value(a)?)?),
+                "--start" => o.start_s = Some(number(&value(a)?)?),
+                "--end" => o.end_s = Some(number(&value(a)?)?),
+                "--max-bandwidth" => o.max_bandwidth_hz = Some(number(&value(a)?)?),
+                "--vowel" => {
+                    let code = value(a)?;
+                    o.vowel = Some(VowelNorm::find(&code).ok_or(format!("unknown vowel {code}"))?);
+                }
                 s if s.starts_with("--") => return Err(format!("unknown option {s}")),
                 s if o.path.is_empty() => o.path = s.to_owned(),
                 s => return Err(format!("unexpected argument {s}")),
@@ -110,6 +131,9 @@ impl Options {
         if let Some(&c) = self.ceilings.first() {
             f.ceiling_hz = c;
         }
+        if self.max_bandwidth_hz.is_some() {
+            f.max_bandwidth_hz = self.max_bandwidth_hz;
+        }
         if self.raw_formants {
             f.max_bandwidth_hz = None;
         }
@@ -117,8 +141,16 @@ impl Options {
     }
 
     fn config(&self) -> Config {
+        let mut smoothing = Config::default().smoothing;
+        if let Some(n) = self.median_frames {
+            smoothing.median_frames = n;
+        }
+        if self.median_outlier_st.is_some() {
+            smoothing.median_outlier_st = self.median_outlier_st;
+        }
         Config {
             pitch_algorithm: self.algorithm,
+            smoothing,
             formants: (!self.no_formants).then(|| self.formant_config()),
             ..Config::default()
         }
@@ -216,9 +248,21 @@ fn vowel(samples: &[f32], rate: f64, opts: &Options) -> Value {
     if !opts.ceilings.is_empty() {
         cfg.ceilings_hz = opts.ceilings.clone();
     }
-    match measure_vowel(samples, rate, &cfg) {
+    let measured = match (opts.start_s, opts.end_s) {
+        (Some(start), Some(end)) => measure_vowel_between(samples, rate, start, end, &cfg),
+        _ => measure_vowel(samples, rate, &cfg),
+    };
+    match measured {
         None => Value::Null,
-        Some(m) => json!({
+        Some(m) => {
+            let resonance = opts.vowel.and_then(|vowel| {
+                resonance_score(&[VowelToken {
+                    vowel,
+                    formants_hz: [m.formants_hz[0], m.formants_hz[1], m.formants_hz[2]],
+                    weight: 1.0,
+                }])
+            });
+            json!({
             "core_version": newvoice_core::VERSION,
             "start_s": m.start_s,
             "end_s": m.end_s,
@@ -235,7 +279,14 @@ fn vowel(samples: &[f32], rate: f64, opts: &Options) -> Value {
             "delta_f_hz": opt(m.delta_f_hz),
             "avtl_cm": opt(m.avtl_cm),
             "confidence": m.confidence,
-        }),
+            "delta_f_position": opt(m.delta_f_hz.and_then(delta_f_position)),
+            "resonance": resonance.map(|r| json!({
+                "version": RESONANCE_SCORE_VERSION,
+                "score": r.score,
+                "by_formant": r.by_formant.map(opt),
+            })),
+            })
+        }
     }
 }
 
