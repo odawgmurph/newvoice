@@ -1,0 +1,87 @@
+name: iOS app (unsigned .ipa)
+
+# Builds the app for a real iPhone without code signing, for sideloading
+# with AltStore and a free Apple ID (docs/install-iphone.md). Runs on pushes
+# that touch the app or the analysis core, and by hand.
+on:
+  push:
+    paths:
+      - "app/**"
+      - "core/**"
+      - ".github/workflows/ios-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    name: Build NewVoice.ipa
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: ios-app
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build the Rust core for iOS and its Swift bindings
+        run: core/scripts/build-ios-xcframework.sh app/modules/newvoice-audio/ios/rust
+
+      - name: Generate the iOS project (Expo prebuild, installs pods)
+        working-directory: app
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Build (Release, device, unsigned)
+        working-directory: app/ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace NewVoice.xcworkspace \
+            -scheme NewVoice \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee xcodebuild.log | grep -E "^(\*\*|error|warning: .*NewVoiceAudio)|error:" || true
+          test -d build/Build/Products/Release-iphoneos/NewVoice.app
+
+      - name: Package NewVoice.ipa
+        working-directory: app/ios
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/NewVoice.app Payload/
+          zip -qry NewVoice.ipa Payload
+          ls -lh NewVoice.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NewVoice-ipa
+          path: app/ios/NewVoice.ipa
+          retention-days: 14
+
+      - name: Keep the build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: app/ios/xcodebuild.log
+          if-no-files-found: ignore

@@ -1,0 +1,12 @@
+[package]
+name = "uniffi-bindgen"
+description = "Generates the Swift and Kotlin bindings for newvoice-ffi (build tool; not shipped)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+uniffi = { version = "0.32", features = ["cli"] }
