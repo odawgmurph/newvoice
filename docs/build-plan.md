@@ -16,7 +16,7 @@ The order follows the tech-stack doc: **risky DSP first → prove capture on rea
 |---|---|---|
 | 0 Foundations | Done | Expo/React Native chosen (D1). No advisors for now, so safety limits are fixed in code (D2). Norms come from raw data (D6). CI builds every target (D7). |
 | 1 Analysis core + Praat harness | Done | Exit criteria met, except low-end ARM timing, which moved to Stage 2 (needs the device matrix). Evidence: [`validation/stage1-synthetic.md`](validation/stage1-synthetic.md) and [`validation/stage1-real.md`](validation/stage1-real.md); decisions D8–D11. |
-| 2 Capture spike | In progress | iOS first (D12): measurement-mode capture into the Rust core, live pitch trace + F2, capability and latency diagnostics, unsigned `.ipa` for AltStore ([`install-iphone.md`](install-iphone.md)). Works on the owner's iPhone (sideloaded, Nov 18); Device testing is the owner's iPhone only; the device matrix is dropped and other devices are community-tested via PRs (D14). Diagnostics export (D13): the app records a 30 s test clip and exports it with timing, cost and live frames; `harness/validation/device.py` scores it against Praat and the desktop core into [`validation/device-matrix.md`](validation/device-matrix.md). Android capture (to be built, not tested) and the go/no-go are still to come. |
+| 2 Capture spike | In progress | iOS first (D12): measurement-mode capture into the Rust core, live pitch trace + F2, capability and latency diagnostics, unsigned `.ipa` for AltStore ([`install-iphone.md`](install-iphone.md)). Works on the owner's iPhone (sideloaded, Nov 18). Device testing is the owner's iPhone only; the device matrix is dropped and other devices are community-tested via PRs (D14). Diagnostics export (D13): the app records a 30 s test clip and exports it with timing, cost and live frames; `harness/validation/device.py` scores it against Praat and the desktop core into [`validation/device-matrix.md`](validation/device-matrix.md). Android capture (to be built, not tested) and the go/no-go are still to come. |
 
 **Stage 1, as built:**
 - YIN/MPM live and pYIN for recordings.
@@ -88,9 +88,9 @@ Differences from the plan:
 - Bare app with a live pitch trace on a semitone axis plus a live F2 readout, drawn with react-native-skia + Reanimated (or the Flutter equivalent).
 - **Capability detection:** report whether the device actually honoured unprocessed mode. Where it didn't, flag reduced accuracy and record it in diagnostics.
 - **Real-time budget on low-end ARM** (moved from Stage 1): run `newvoice-cli bench` (or the same loop through the FFI) on the cheapest phones in the matrix; per-frame cost must fit easily inside the 10 ms hop. It is about 0.55 ms per frame on x86.
-- ~~**Device matrix:**~~ *Dropped (D13): testing is on the owner's iPhone only; anyone else sideloads and sends PRs for device-specific fixes.* Was: test across roughly 15–25 phones covering budget and flagship Android brands and several iPhone generations, with built-in mic, wired headset and Bluetooth. Compare readings against a reference recording run through Praat.
+- ~~**Device matrix:**~~ *Dropped (D14): testing is on the owner's iPhone only; anyone else sideloads and sends PRs for device-specific fixes.* Was: test across roughly 15–25 phones covering budget and flagship Android brands and several iPhone generations, with built-in mic, wired headset and Bluetooth. Compare readings against a reference recording run through Praat.
 
-**Exit (D13: judged on the owner's iPhone):** <100 ms mic-to-screen latency; steady 60 fps; accuracy against a Praat reference recorded for that phone; a supported-device policy decided, including a Bluetooth-mic warning.
+**Exit (D14: judged on the owner's iPhone):** <100 ms mic-to-screen latency; steady 60 fps; accuracy against a Praat reference recorded for that phone; a supported-device policy decided, including a Bluetooth-mic warning.
 
 **Go/no-go:** if unprocessed capture proves unreliable on too many devices, revisit scope before building the product layer. Options: a Chrome-first PWA fallback, or a narrower device list.
 
