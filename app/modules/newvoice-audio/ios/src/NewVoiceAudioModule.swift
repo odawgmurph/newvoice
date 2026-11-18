@@ -1,9 +1,15 @@
 import ExpoModulesCore
+import UIKit
 
 struct StartOptions: Record {
   /// Live formant ceiling; ideally the one the user's baseline vowels chose.
   @Field
   var formantCeilingHz: Double? = nil
+
+  /// Record a test clip of this many seconds for the diagnostics export;
+  /// capture stops by itself at the end.
+  @Field
+  var recordSeconds: Double? = nil
 }
 
 /// The JavaScript face of `CaptureSession`. Only computed frames and
@@ -35,7 +41,9 @@ public class NewVoiceAudioModule: Module {
           promise.reject("E_MIC_PERMISSION", "Microphone permission was not granted.")
           return
         }
-        self.capture.start(formantCeilingHz: options.formantCeilingHz) { result in
+        self.capture.start(
+          formantCeilingHz: options.formantCeilingHz, recordSeconds: options.recordSeconds
+        ) { result in
           switch result {
           case .success(let info): promise.resolve(info)
           case .failure(let error): promise.reject("E_CAPTURE", error.localizedDescription)
@@ -52,8 +60,49 @@ public class NewVoiceAudioModule: Module {
       self.capture.currentInfo { promise.resolve($0) }
     }
 
+    // Writes the last test clip's files and opens the share sheet (AirDrop,
+    // Save to Files, Mail…). The files leave the phone only if the user
+    // picks a destination there.
+    AsyncFunction("exportDiagnostics") { (appReport: [String: Any], promise: Promise) in
+      self.capture.exportDiagnostics(appReport: appReport) { result in
+        switch result {
+        case .failure(let error):
+          promise.reject("E_EXPORT", error.localizedDescription)
+        case .success(let urls):
+          DispatchQueue.main.async {
+            self.share(urls, promise: promise)
+          }
+        }
+      }
+    }
+
     OnDestroy {
       self.capture.stop {}
     }
+  }
+
+  private func share(_ urls: [URL], promise: Promise) {
+    guard let presenter = appContext?.utilities?.currentViewController() else {
+      promise.reject("E_EXPORT", CaptureError.noViewController.localizedDescription)
+      return
+    }
+    let sheet = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+    var settled = false
+    sheet.completionWithItemsHandler = { activity, completed, _, _ in
+      guard !settled else { return }
+      settled = true
+      promise.resolve([
+        "shared": completed,
+        "activity": activity?.rawValue ?? "",
+        "files": urls.map { $0.lastPathComponent },
+      ] as [String: Any])
+    }
+    // iPad shows the sheet as a popover, which needs an anchor.
+    if let popover = sheet.popoverPresentationController {
+      popover.sourceView = presenter.view
+      popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+      popover.permittedArrowDirections = []
+    }
+    presenter.present(sheet, animated: true)
   }
 }

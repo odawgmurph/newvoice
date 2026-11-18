@@ -48,6 +48,8 @@ Use the built-in iPhone microphone in a quiet room, and hum or speak.
 
 A screenshot of the screen while you hold a note says most of this. If you can, also try wired earphones with a mic, and a Bluetooth headset (expect a warning there).
 
+**For the device matrix,** record a test clip for each input and send the exported files: **Record test clip** (30 s; hold "ah", slide low to high and back, read a sentence), then **Export diagnostics**. The steps and what gets measured are in [`validation/device-matrix.md`](validation/device-matrix.md).
+
 ## Removing it
 
 Delete the app from the home screen. You can also delete AltStore, and remove the spare Apple ID's certificate under *Settings → General → VPN & Device Management*.

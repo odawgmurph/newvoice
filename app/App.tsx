@@ -1,11 +1,17 @@
 import { Canvas, Line, Path, Skia, vec } from '@shopify/react-native-skia';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated';
 
 import NewVoiceAudio from './modules/newvoice-audio/src/NewVoiceAudioModule';
-import type { CaptureInfo, Frame, FramesEvent } from './modules/newvoice-audio/src/NewVoiceAudio.types';
+import type {
+  AppReport,
+  CaptureInfo,
+  Frame,
+  FramesEvent,
+  SeriesStats,
+} from './modules/newvoice-audio/src/NewVoiceAudio.types';
 
 // Stage 2 capture spike: live pitch trace on a semitone axis plus an F2
 // readout, with the diagnostics the device matrix needs. Neutral labels only
@@ -18,6 +24,9 @@ const TRACE_HEIGHT = 260;
 // Readouts hide formants below this confidence (about 50% chance of a >10% error).
 const MIN_FORMANT_CONFIDENCE = 0.5;
 
+// Test clip for the device matrix (docs/validation/device-matrix.md).
+const CLIP_S = 30;
+
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 
 function noteName(st: number): string {
@@ -26,6 +35,31 @@ function noteName(st: number): string {
   const name = `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
   return `${name} ${cents >= 0 ? '+' : '−'}${Math.abs(cents)}¢`;
 }
+
+function seriesStats(values: number[]): SeriesStats {
+  const v = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  const at = (q: number) => v[Math.min(v.length - 1, Math.floor(q * v.length))];
+  return { median: at(0.5), p95: at(0.95), max: v[v.length - 1], n: v.length };
+}
+
+type Series = {
+  micToScreenMs: number[];
+  bridgeMs: number[];
+  analysisLagMs: number[];
+  inputLatencyMs: number[];
+  uiFps: number[];
+  jsFps: number[];
+};
+
+const emptySeries = (): Series => ({
+  micToScreenMs: [],
+  bridgeMs: [],
+  analysisLagMs: [],
+  inputLatencyMs: [],
+  uiFps: [],
+  jsFps: [],
+});
 
 type Timing = {
   analysisLagMs: number;
@@ -44,6 +78,13 @@ export default function App() {
   const [latest, setLatest] = useState<Frame | null>(null);
   const [timing, setTiming] = useState<Timing | null>(null);
   const [fps, setFps] = useState({ ui: 0, js: 0 });
+  const [note, setNote] = useState('');
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Timing series gathered while a test clip records, for the export.
+  const series = useRef<Series>(emptySeries());
+  const recording = useRef(false);
 
   // Trace points as a flat [t, st, t, st, …] list (st NaN when unvoiced),
   // shared with the UI thread, which draws the path.
@@ -88,7 +129,12 @@ export default function App() {
     };
     raf = requestAnimationFrame(loop);
     const id = setInterval(() => {
-      setFps({ ui: 1000 / uiFrameMs.value, js: frames });
+      const ui = 1000 / uiFrameMs.value;
+      setFps({ ui, js: frames });
+      if (recording.current) {
+        series.current.uiFps.push(ui);
+        series.current.jsFps.push(frames);
+      }
       frames = 0;
     }, 1000);
     return () => {
@@ -109,42 +155,86 @@ export default function App() {
       if (drop > 0) buf.splice(0, drop);
       points.value = buf.slice();
 
+      const bridgeMs = Date.now() - event.sentAtMs;
+      if (recording.current) {
+        const s = series.current;
+        s.micToScreenMs.push(event.inputLatencyMs + event.analysisLagMs + bridgeMs + uiFrameMs.value);
+        s.bridgeMs.push(bridgeMs);
+        s.analysisLagMs.push(event.analysisLagMs);
+        s.inputLatencyMs.push(event.inputLatencyMs);
+      }
+
       setLatest(event.frames[event.frames.length - 1]);
       setTiming({
         analysisLagMs: event.analysisLagMs,
         inputLatencyMs: event.inputLatencyMs,
-        bridgeMs: Date.now() - event.sentAtMs,
+        bridgeMs,
         droppedSamples: event.droppedSamples,
       });
     });
     const infoSub = NewVoiceAudio.addListener('onCaptureInfo', (next: CaptureInfo) => {
       setInfo(next);
       setRunning(next.running);
+      recording.current = next.recording;
     });
     return () => {
       framesSub.remove();
       infoSub.remove();
     };
-  }, [points]);
+  }, [points, uiFrameMs]);
 
-  const toggle = async () => {
+  const start = async (recordSeconds?: number) => {
     setError(null);
+    setExportStatus(null);
     try {
       if (running) {
         await NewVoiceAudio.stop();
         setRunning(false);
-        setInfo(await NewVoiceAudio.getCaptureInfo());
+        const after = await NewVoiceAudio.getCaptureInfo();
+        recording.current = after.recording;
+        setInfo(after);
       } else {
         buffer.current = [];
         points.value = [];
-        setInfo(await NewVoiceAudio.start({}));
+        if (recordSeconds != null) series.current = emptySeries();
+        const started = await NewVoiceAudio.start(recordSeconds != null ? { recordSeconds } : {});
+        recording.current = started.recording;
+        setInfo(started);
         setRunning(true);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRunning(false);
+      recording.current = false;
     }
   };
+
+  const exportDiagnostics = async () => {
+    setError(null);
+    setExportStatus(null);
+    setExporting(true);
+    try {
+      const s = series.current;
+      const report: AppReport = {
+        micToScreenMs: seriesStats(s.micToScreenMs),
+        bridgeMs: seriesStats(s.bridgeMs),
+        analysisLagMs: seriesStats(s.analysisLagMs),
+        inputLatencyMs: seriesStats(s.inputLatencyMs),
+        uiFps: seriesStats(s.uiFps),
+        jsFps: seriesStats(s.jsFps),
+        note: note.trim(),
+      };
+      const result = await NewVoiceAudio.exportDiagnostics(report);
+      setExportStatus(result.shared ? `Sent ${result.files.join(' + ')}` : 'Not sent');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const isRecording = running && (info?.recording ?? false);
+  const testClipS = info?.testClipS ?? 0;
 
   const f2Trusted = latest != null && latest.f2Hz != null && latest.formantConfidence >= MIN_FORMANT_CONFIDENCE;
   const micToScreenMs =
@@ -205,10 +295,49 @@ export default function App() {
       </View>
       <Text style={styles.axisCaption}>↑ higher · last {WINDOW_S} s · semitones</Text>
 
-      <Pressable style={[styles.button, running && styles.buttonStop]} onPress={toggle}>
-        <Text style={styles.buttonText}>{running ? 'Stop' : 'Start listening'}</Text>
+      <Pressable style={[styles.button, running && styles.buttonStop]} onPress={() => start()}>
+        <Text style={styles.buttonText}>
+          {isRecording
+            ? `Stop recording (${Math.min(Math.floor(latest?.t ?? 0), CLIP_S)} / ${CLIP_S} s)`
+            : running
+              ? 'Stop'
+              : 'Start listening'}
+        </Text>
       </Pressable>
       {error != null && <Text style={styles.error}>{error}</Text>}
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Test clip</Text>
+        <Text style={styles.help}>
+          Records {CLIP_S} s for the device matrix. Quiet room. Hold “ah” for 3 s, slide from low to high and back,
+          then read a sentence aloud. The clip stays on this phone until you export it.
+        </Text>
+        {!running && (
+          <Pressable style={[styles.button, styles.buttonSecondary]} onPress={() => start(CLIP_S)}>
+            <Text style={styles.buttonText}>Record test clip</Text>
+          </Pressable>
+        )}
+        {!running && testClipS > 0 && (
+          <>
+            <Text style={styles.panelRow}>Last clip: {testClipS.toFixed(1)} s</Text>
+            <TextInput
+              style={styles.input}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Note (optional): mic, room, what you said"
+              placeholderTextColor="#6b7280"
+            />
+            <Pressable
+              style={[styles.button, styles.buttonSecondary, exporting && styles.buttonStop]}
+              onPress={exportDiagnostics}
+              disabled={exporting}
+            >
+              <Text style={styles.buttonText}>{exporting ? 'Preparing…' : 'Export diagnostics'}</Text>
+            </Pressable>
+          </>
+        )}
+        {exportStatus != null && <Text style={styles.panelRow}>{exportStatus}</Text>}
+      </View>
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Capture</Text>
@@ -272,6 +401,17 @@ const styles = StyleSheet.create({
   axisCaption: { color: '#6b7280', fontSize: 12, marginTop: 4, marginBottom: 12 },
   button: { backgroundColor: '#0284c7', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   buttonStop: { backgroundColor: '#374151' },
+  buttonSecondary: { backgroundColor: '#0f766e', marginTop: 8 },
+  help: { color: '#9ca3af', fontSize: 13, marginBottom: 4 },
+  input: {
+    color: '#e5e7eb',
+    backgroundColor: '#0b1120',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    fontSize: 14,
+  },
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   error: { color: '#fca5a5', marginTop: 8 },
   panel: { backgroundColor: '#111827', borderRadius: 10, padding: 12, marginTop: 12 },
