@@ -7,7 +7,12 @@ import AVFoundation
 /// arrives on the realtime thread through an `AVAudioSinkNode`, which only
 /// copies channel 0 into a ring. Every 5 ms the analysis queue drains the
 /// ring into the Rust `LiveAnalyser` and collects finished frames, sending
-/// them out in batches about every 16 ms. Raw audio never leaves this class.
+/// them out in batches about every 16 ms. Raw audio never reaches JavaScript.
+///
+/// A capture can also record a test clip for the device matrix: the audio
+/// the analyser saw, the frames it produced and what they cost. The clip is
+/// kept in memory and only written to disk when the user exports it (see
+/// `exportDiagnostics`).
 final class CaptureSession {
   /// Receives each batch of frames (on the analysis queue).
   var onFrames: (([String: Any?]) -> Void)?
@@ -27,6 +32,11 @@ final class CaptureSession {
   private var newestFrameS: Double = 0
   private var lastSend = DispatchTime.now()
   private var observers: [NSObjectProtocol] = []
+  private var settings = defaultSettings()
+  private var cost = AnalysisCost()
+  private var recording: TestClip?
+  private var recordingLimit = 0
+  private var lastClip: TestClip?
 
   // MARK: - Permission
 
@@ -40,10 +50,16 @@ final class CaptureSession {
 
   // MARK: - Start / stop (serialised on the analysis queue)
 
-  func start(formantCeilingHz: Double?, completion: @escaping (Result<[String: Any?], Error>) -> Void) {
+  /// With `recordSeconds`, the capture also records a test clip and stops
+  /// itself after that long.
+  func start(
+    formantCeilingHz: Double?,
+    recordSeconds: Double?,
+    completion: @escaping (Result<[String: Any?], Error>) -> Void
+  ) {
     queue.async {
       do {
-        try self.startOnQueue(formantCeilingHz: formantCeilingHz)
+        try self.startOnQueue(formantCeilingHz: formantCeilingHz, recordSeconds: recordSeconds)
         completion(.success(self.info()))
       } catch {
         self.stopOnQueue()
@@ -63,7 +79,7 @@ final class CaptureSession {
     queue.async { completion(self.info()) }
   }
 
-  private func startOnQueue(formantCeilingHz: Double?) throws {
+  private func startOnQueue(formantCeilingHz: Double?, recordSeconds: Double?) throws {
     stopOnQueue()
 
     let session = AVAudioSession.sharedInstance()
@@ -87,9 +103,11 @@ final class CaptureSession {
       settings.formantCeilingHz = ceiling
     }
     analyser = try LiveAnalyser(sampleRate: UInt32(format.sampleRate.rounded()), settings: settings)
+    self.settings = settings
     sampleRate = format.sampleRate
     samplesPushed = 0
     droppedSamples = 0
+    cost = AnalysisCost()
     pending.removeAll()
     ring.reset()
 
@@ -109,6 +127,16 @@ final class CaptureSession {
     try engine.start()
     self.engine = engine
 
+    if let seconds = recordSeconds, seconds > 0 {
+      // Starts with the capture, so clip sample 0 is analyser sample 0 and
+      // frame times line up with the clip exactly.
+      recordingLimit = Int(seconds * format.sampleRate)
+      var clip = TestClip(sampleRate: format.sampleRate, settings: settings, startInfo: info())
+      clip.samples.reserveCapacity(recordingLimit + 4096)
+      recording = clip
+      lastClip = nil
+    }
+
     observe(session)
 
     let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -121,6 +149,7 @@ final class CaptureSession {
   private func stopOnQueue() {
     timer?.cancel()
     timer = nil
+    finishRecording()
     if let engine {
       engine.stop()
       self.engine = nil
@@ -138,11 +167,25 @@ final class CaptureSession {
   private func tick() {
     guard let analyser else { return }
     droppedSamples = ring.drain(into: &chunk)
+    let started = DispatchTime.now().uptimeNanoseconds
     if !chunk.isEmpty {
       analyser.push(samples: chunk)
       samplesPushed += chunk.count
     }
     let frames = analyser.pull()
+    cost.add(nanoseconds: DispatchTime.now().uptimeNanoseconds - started, frames: frames.count)
+
+    if recording != nil {
+      recording!.samples.append(contentsOf: chunk)
+      recording!.frames.append(contentsOf: frames)
+      if recording!.samples.count >= recordingLimit {
+        recording!.reachedLimit = true
+        stopOnQueue()
+        onInfo?(info())
+        return
+      }
+    }
+
     for f in frames {
       pending.append(Self.payload(f))
       newestFrameS = f.timeS
@@ -183,6 +226,39 @@ final class CaptureSession {
     ]
   }
 
+  /// Moves the clip being recorded (if any) to `lastClip`, with what the
+  /// session looked like at the end. Call before the engine stops.
+  private func finishRecording() {
+    guard var clip = recording else { return }
+    recording = nil
+    clip.endInfo = info()
+    clip.droppedSamples = droppedSamples
+    clip.cost = cost
+    lastClip = clip
+  }
+
+  // MARK: - Diagnostics export
+
+  /// Writes the last test clip as `<name>.wav` (mono 32-bit float, the audio
+  /// the analyser saw) and `<name>.json` (device, capture info, the live
+  /// frames, analysis cost, a benchmark, plus `appReport` from JavaScript),
+  /// and returns both URLs. Earlier exports are deleted first, so at most
+  /// one clip is ever on disk. `harness/validation/device.py` reads them.
+  func exportDiagnostics(
+    appReport: [String: Any],
+    completion: @escaping (Result<[URL], Error>) -> Void
+  ) {
+    queue.async {
+      do {
+        guard self.engine == nil else { throw CaptureError.stillRunning }
+        guard let clip = self.lastClip else { throw CaptureError.noTestClip }
+        completion(.success(try Diagnostics.write(clip: clip, appReport: appReport)))
+      } catch {
+        completion(.failure(error))
+      }
+    }
+  }
+
   // MARK: - Capability report
 
   /// What iOS actually gave us. `measurementMode` false, a non-standard
@@ -215,6 +291,8 @@ final class CaptureSession {
       "inputGainSettable": session.isInputGainSettable,
       "inputGain": Double(session.inputGain),
       "coreVersion": coreVersion(),
+      "recording": recording != nil,
+      "testClipS": lastClip.map { Double($0.samples.count) / $0.sampleRate } ?? 0,
     ]
   }
 
@@ -244,11 +322,17 @@ final class CaptureSession {
 enum CaptureError: LocalizedError {
   case noInput
   case unsupportedFormat(String)
+  case stillRunning
+  case noTestClip
+  case noViewController
 
   var errorDescription: String? {
     switch self {
     case .noInput: return "No microphone input is available."
     case .unsupportedFormat(let f): return "Unsupported input format: \(f)"
+    case .stillRunning: return "Stop listening before exporting."
+    case .noTestClip: return "Record a test clip first."
+    case .noViewController: return "Couldn't open the share sheet."
     }
   }
 }
