@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert } from 'react-native';
 
 import { user as userTable } from '../db/schema';
 import { PinSetup } from '../privacy/PinSetup';
 import { biometricAvailable, biometricEnabled, removePin, setBiometricEnabled } from '../privacy/pinStore';
 import { useApp, useDb } from '../state/AppState';
-import { Body, Button, colors, Heading, Panel, Screen } from '../ui/kit';
+import { Body, Button, Card, Heading, Screen, Toggle } from '../ui/kit';
 
 export default function Settings() {
   const db = useDb();
@@ -45,7 +45,7 @@ export default function Settings() {
   return (
     <Screen>
       <Heading>App lock</Heading>
-      <Panel>
+      <Card>
         {settingPin ? (
           <PinSetup
             onDone={async () => {
@@ -83,10 +83,10 @@ export default function Settings() {
             <Button label="Set a PIN" onPress={() => setSettingPin(true)} />
           </>
         )}
-      </Panel>
+      </Card>
 
       <Heading>Recordings</Heading>
-      <Panel>
+      <Card>
         <Toggle
           label="Numbers only, never keep audio"
           value={user?.metricsOnly ?? true}
@@ -98,46 +98,21 @@ export default function Settings() {
           disabled={user?.metricsOnly ?? true}
           onChange={(on) => void update({ playbackEnabled: on })}
         />
-      </Panel>
+      </Card>
 
       <Heading>Quick exit</Heading>
-      <Panel>
+      <Card>
         <Body muted>
           Exit, at the top of every screen, blanks NewVoice at once and stops the microphone. Press and hold the blank
           screen for a moment to come back{pinSet ? ', then enter your PIN' : ''}.
         </Body>
-      </Panel>
+      </Card>
 
       <Heading>Your data</Heading>
-      <Panel>
+      <Card>
         <Body muted>Everything is stored encrypted on this phone. Nothing is uploaded.</Body>
         <Button label="Delete all data…" kind="danger" onPress={confirmDelete} />
-      </Panel>
+      </Card>
     </Screen>
   );
 }
-
-function Toggle({
-  label,
-  value,
-  onChange,
-  disabled = false,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (on: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <View style={[styles.toggle, disabled && styles.disabled]}>
-      <Text style={styles.toggleLabel}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: colors.accent }} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, gap: 12 },
-  toggleLabel: { color: colors.text, fontSize: 16, flex: 1 },
-  disabled: { opacity: 0.5 },
-});

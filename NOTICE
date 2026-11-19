@@ -21,6 +21,15 @@ LibriSpeech dev-clean, used as validation test data only (not shipped):
   Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/);
   source https://www.openslr.org/12/.
 
+The app bundles these fonts, each under the SIL Open Font License 1.1
+(https://openfontlicense.org), loaded through the @expo-google-fonts
+packages (MIT, Copyright (c) 2020 Expo):
+  Fraunces: Copyright 2018 The Fraunces Project Authors
+    (https://github.com/undercasetype/Fraunces)
+  Atkinson Hyperlegible: Copyright 2020 Braille Institute of America, Inc.
+  DM Mono: Copyright 2020 The DM Mono Project Authors
+    (https://www.github.com/googlefonts/dm-mono)
+
 ----------------------------------------------------------------------------
 THE MARGARITA CLAUSE 
 

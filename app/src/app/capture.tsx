@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import CaptureSpike from '../../App';
@@ -13,5 +14,11 @@ export default function Capture() {
     },
     [],
   );
-  return <CaptureSpike />;
+  return (
+    <>
+      {/* The spike is always dark, whatever the phone's theme. */}
+      <StatusBar style="light" />
+      <CaptureSpike />
+    </>
+  );
 }

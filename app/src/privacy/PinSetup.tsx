@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
 
-import { Body, Button, colors, Field } from '../ui/kit';
+import { Body, Button, ErrorText, Field } from '../ui/kit';
 import { isValidPin, PIN_MAX, PIN_MIN } from './pin';
 import { setPin } from './pinStore';
 
@@ -46,13 +45,9 @@ export function PinSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: 
         maxLength={PIN_MAX}
         accessibilityLabel="Confirm PIN"
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <ErrorText>{error}</ErrorText> : null}
       <Button label="Save PIN" onPress={save} />
       {onCancel ? <Button label="Cancel" kind="secondary" onPress={onCancel} /> : null}
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  error: { color: colors.dangerText, marginBottom: 8 },
-});

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
 
 import { useApp } from '../state/AppState';
-import { Body, Button, colors, Field, Gap, Screen, Title } from '../ui/kit';
+import { Body, Button, ErrorText, Field, Gap, Screen, Title } from '../ui/kit';
+import { type } from '../ui/theme';
 import { PIN_MAX } from './pin';
 import { biometricEnabled, checkPin, unlockWithBiometrics } from './pinStore';
 
@@ -47,7 +48,7 @@ export function LockScreen() {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} edges={['top', 'bottom']}>
       <View style={styles.center}>
         <Title>Enter PIN</Title>
         <Field
@@ -61,7 +62,7 @@ export function LockScreen() {
           accessibilityLabel="PIN"
           style={styles.pin}
         />
-        {message ? <Text style={styles.error}>{message}</Text> : null}
+        {message ? <ErrorText>{message}</ErrorText> : null}
         <Button label="Unlock" onPress={submit} disabled={busy || pin.length === 0} />
         {useBio ? <Button label="Use Face ID" kind="secondary" onPress={tryBiometrics} /> : null}
         <Gap size={24} />
@@ -115,7 +116,7 @@ export function DbErrorScreen() {
   const { error } = status;
 
   return (
-    <Screen>
+    <Screen edges={['top', 'bottom']}>
       <Title>Can't open your saved data</Title>
       {error.kind === 'no-cipher' ? (
         <Body>
@@ -144,7 +145,6 @@ export function DbErrorScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center' },
-  pin: { fontSize: 28, letterSpacing: 8, textAlign: 'center' },
-  error: { color: colors.dangerText, marginBottom: 8 },
+  pin: { ...type.readout, letterSpacing: 8, textAlign: 'center' },
   cover: { flex: 1, backgroundColor: '#000' },
 });

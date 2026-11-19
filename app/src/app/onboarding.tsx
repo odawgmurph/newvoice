@@ -1,16 +1,30 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 
 import { user as userTable, type Environment, type Goal } from '../db/schema';
 import { PinSetup } from '../privacy/PinSetup';
 import { useApp, useDb } from '../state/AppState';
-import { Body, Bullet, Button, Choice, Field, Gap, Heading, Screen, Title } from '../ui/kit';
+import {
+  BackButton,
+  Body,
+  Bullet,
+  Button,
+  Card,
+  Choice,
+  Display,
+  ExitButton,
+  Field,
+  Heading,
+  Screen,
+  StepDots,
+} from '../ui/kit';
 
 // Onboarding (build plan Stage 4; handbook §4.3): goal, playback comfort,
 // practice environment, language, optional context, an optional PIN, and the
-// safety primer. Copy follows D2 (neutral labels) and D3 (education app:
-// no therapy, treatment, diagnosis or clinical claims). Baseline capture
-// follows in a later iteration.
+// safety primer. Layout follows the design canvas's Onboarding board. Copy
+// follows D2 (neutral labels) and D3 (education app: no therapy, treatment,
+// diagnosis or clinical claims). Baseline capture follows in a later iteration.
 
 type Playback = 'metrics' | 'keep' | 'listen';
 type Context = 'hormones' | 'surgery' | 'both' | 'neither';
@@ -18,9 +32,46 @@ type Slp = 'yes' | 'no' | 'past';
 
 const STEPS = ['welcome', 'goal', 'playback', 'environment', 'about', 'lock', 'safety'] as const;
 
+type StepProps = {
+  children: ReactNode;
+  action?: string;
+  onAction?: () => void;
+  canContinue?: boolean;
+  showFooter?: boolean;
+};
+
+/** One onboarding step: back · step dots · Exit, the content, and a pinned action. */
+function StepScreen({
+  step,
+  onBack,
+  onExit,
+  onNext,
+  children,
+  action = 'Continue',
+  onAction,
+  canContinue = true,
+  showFooter = true,
+}: StepProps & { step: number; onBack: () => void; onExit: () => void; onNext: () => void }) {
+  return (
+    <Screen
+      edges={['top', 'bottom']}
+      header={
+        <>
+          {step > 0 ? <BackButton onPress={onBack} /> : <View style={{ width: 44 }} />}
+          <StepDots count={STEPS.length} current={step} />
+          <ExitButton onPress={onExit} />
+        </>
+      }
+      footer={showFooter ? <Button label={action} onPress={onAction ?? onNext} disabled={!canContinue} /> : undefined}
+    >
+      {children}
+    </Screen>
+  );
+}
+
 export default function Onboarding() {
   const db = useDb();
-  const { refreshUser, refreshPin, pinSet } = useApp();
+  const { refreshUser, refreshPin, pinSet, quickExit } = useApp();
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [goalNote, setGoalNote] = useState('');
@@ -54,19 +105,13 @@ export default function Onboarding() {
     router.replace('/');
   };
 
-  const nav = (canContinue = true) => (
-    <>
-      <Gap />
-      <Button label="Continue" onPress={next} disabled={!canContinue} />
-      {step > 0 ? <Button label="Back" kind="secondary" onPress={back} /> : null}
-    </>
-  );
+  const nav = { step, onBack: back, onExit: quickExit, onNext: next };
 
   switch (STEPS[step]) {
     case 'welcome':
       return (
-        <Screen>
-          <Title>Welcome</Title>
+        <StepScreen key={step} {...nav}>
+          <Display>Your voice, your pace</Display>
           <Body>
             NewVoice helps you practise toward the voice you want. It shows pitch, resonance and vocal weight compared
             with your own starting point, and builds up skills in short lessons.
@@ -75,121 +120,144 @@ export default function Onboarding() {
             Everything stays on this phone: there's no account, and audio is analysed here and never uploaded. Your
             answers are stored encrypted.
           </Body>
-          <Body muted>
-            NewVoice is a practice and learning tool. It can't check the health of your voice.
-          </Body>
-          {nav()}
-        </Screen>
+          <Body muted>NewVoice is a practice and learning tool. It can't check the health of your voice.</Body>
+        </StepScreen>
       );
 
     case 'goal':
       return (
-        <Screen>
-          <Title>What are you aiming for?</Title>
-          <Body muted>You can change this any time. There's no single right voice.</Body>
-          <Choice label="More feminine" selected={goal === 'feminine'} onPress={() => setGoal('feminine')} />
-          <Choice label="Androgynous" selected={goal === 'androgynous'} onPress={() => setGoal('androgynous')} />
-          <Choice
-            label="Flexible"
-            detail="Able to move between voices"
-            selected={goal === 'flexible'}
-            onPress={() => setGoal('flexible')}
-          />
-          <Choice label="My own goal" selected={goal === 'own'} onPress={() => setGoal('own')} />
+        <StepScreen key={step} {...nav} canContinue={goal != null}>
+          <Display>Where would you like your voice to go?</Display>
+          <Body muted>
+            There's no right answer, and you can change this any time. We'll always measure against your own starting
+            point.
+          </Body>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Voice goal">
+            <Choice
+              label="More feminine"
+              detail="Lighter, brighter, higher"
+              selected={goal === 'feminine'}
+              onPress={() => setGoal('feminine')}
+            />
+            <Choice
+              label="Androgynous"
+              detail="Somewhere comfortably in between"
+              selected={goal === 'androgynous'}
+              onPress={() => setGoal('androgynous')}
+            />
+            <Choice
+              label="Flexible"
+              detail="Switch between voices when you choose"
+              selected={goal === 'flexible'}
+              onPress={() => setGoal('flexible')}
+            />
+            <Choice
+              label="My own goal"
+              detail="Pick your own targets for each dimension"
+              selected={goal === 'own'}
+              onPress={() => setGoal('own')}
+            />
+          </View>
           {goal === 'own' ? (
             <Field value={goalNote} onChangeText={setGoalNote} placeholder="Describe it, if you like" maxLength={200} />
           ) : null}
-          {nav(goal != null)}
-        </Screen>
+        </StepScreen>
       );
 
     case 'playback':
       return (
-        <Screen>
-          <Title>Hearing your own voice</Title>
+        <StepScreen key={step} {...nav}>
+          <Display>Hearing your own voice</Display>
           <Body muted>
             Hearing recordings of yourself can be uncomfortable, especially early on. You can practise from the numbers
             alone.
           </Body>
-          <Choice
-            label="Numbers only"
-            detail="Keep the measurements, never keep audio."
-            selected={playback === 'metrics'}
-            onPress={() => setPlayback('metrics')}
-          />
-          <Choice
-            label="Keep audio, don't play it"
-            detail="Saved on this phone so you can listen later if you choose."
-            selected={playback === 'keep'}
-            onPress={() => setPlayback('keep')}
-          />
-          <Choice
-            label="Keep audio and let me listen back"
-            selected={playback === 'listen'}
-            onPress={() => setPlayback('listen')}
-          />
-          {nav()}
-        </Screen>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Recordings">
+            <Choice
+              label="Numbers only"
+              detail="Keep the measurements, never keep audio"
+              selected={playback === 'metrics'}
+              onPress={() => setPlayback('metrics')}
+            />
+            <Choice
+              label="Keep audio, don't play it"
+              detail="Saved on this phone so you can listen later if you choose"
+              selected={playback === 'keep'}
+              onPress={() => setPlayback('keep')}
+            />
+            <Choice
+              label="Keep audio and let me listen back"
+              selected={playback === 'listen'}
+              onPress={() => setPlayback('listen')}
+            />
+          </View>
+        </StepScreen>
       );
 
     case 'environment':
       return (
-        <Screen>
-          <Title>Where will you practise?</Title>
-          <Choice
-            label="Somewhere private"
-            selected={environment === 'private'}
-            onPress={() => setEnvironment('private')}
-          />
-          <Choice
-            label="Others may hear me"
-            detail="Lessons can lean on quieter exercises."
-            selected={environment === 'shared'}
-            onPress={() => setEnvironment('shared')}
-          />
-          <Choice
-            label="I can only be quiet"
-            detail="Quiet and whisper exercises where possible."
-            selected={environment === 'quiet_only'}
-            onPress={() => setEnvironment('quiet_only')}
-          />
-          {nav(environment != null)}
-        </Screen>
+        <StepScreen key={step} {...nav} canContinue={environment != null}>
+          <Display>Where will you practise?</Display>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Practice environment">
+            <Choice
+              label="Somewhere private"
+              selected={environment === 'private'}
+              onPress={() => setEnvironment('private')}
+            />
+            <Choice
+              label="Others may hear me"
+              detail="Lessons can lean on quieter exercises"
+              selected={environment === 'shared'}
+              onPress={() => setEnvironment('shared')}
+            />
+            <Choice
+              label="I can only be quiet"
+              detail="Quiet and whisper exercises where possible"
+              selected={environment === 'quiet_only'}
+              onPress={() => setEnvironment('quiet_only')}
+            />
+          </View>
+        </StepScreen>
       );
 
     case 'about':
       return (
-        <Screen>
-          <Title>A little context</Title>
+        <StepScreen key={step} {...nav}>
+          <Display>A little context</Display>
           <Body muted>All optional. It helps set expectations and stays on this phone.</Body>
           <Heading>Language or accent you speak in</Heading>
           <Field value={language} onChangeText={setLanguage} placeholder="e.g. English, Scottish" maxLength={80} />
           <Body muted>The reference data is mostly from American English speakers for now.</Body>
           <Heading>Hormones or voice surgery</Heading>
-          <Choice label="Hormones" selected={context === 'hormones'} onPress={() => setContext('hormones')} />
-          <Choice label="Voice surgery" selected={context === 'surgery'} onPress={() => setContext('surgery')} />
-          <Choice label="Both" selected={context === 'both'} onPress={() => setContext('both')} />
-          <Choice label="Neither" selected={context === 'neither'} onPress={() => setContext('neither')} />
-          <Choice label="Prefer not to say" selected={context === null} onPress={() => setContext(null)} />
+          <View accessibilityRole="radiogroup" accessibilityLabel="Hormones or voice surgery">
+            <Choice label="Hormones" selected={context === 'hormones'} onPress={() => setContext('hormones')} />
+            <Choice label="Voice surgery" selected={context === 'surgery'} onPress={() => setContext('surgery')} />
+            <Choice label="Both" selected={context === 'both'} onPress={() => setContext('both')} />
+            <Choice label="Neither" selected={context === 'neither'} onPress={() => setContext('neither')} />
+            <Choice label="Prefer not to say" selected={context === null} onPress={() => setContext(null)} />
+          </View>
           <Heading>Working with a speech-language pathologist?</Heading>
-          <Choice label="Yes" selected={slp === 'yes'} onPress={() => setSlp('yes')} />
-          <Choice label="In the past" selected={slp === 'past'} onPress={() => setSlp('past')} />
-          <Choice label="No" selected={slp === 'no'} onPress={() => setSlp('no')} />
-          <Choice label="Prefer not to say" selected={slp === null} onPress={() => setSlp(null)} />
-          {nav()}
-        </Screen>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Speech-language pathologist">
+            <Choice label="Yes" selected={slp === 'yes'} onPress={() => setSlp('yes')} />
+            <Choice label="In the past" selected={slp === 'past'} onPress={() => setSlp('past')} />
+            <Choice label="No" selected={slp === 'no'} onPress={() => setSlp('no')} />
+            <Choice label="Prefer not to say" selected={slp === null} onPress={() => setSlp(null)} />
+          </View>
+        </StepScreen>
       );
 
     case 'lock':
       return (
-        <Screen>
-          <Title>Keep it private</Title>
+        <StepScreen key={step} {...nav} showFooter={!settingPin} action={pinSet ? 'Continue' : 'Skip for now'}>
+          <Display>Keep it private</Display>
           <Body>
-            A PIN keeps NewVoice locked whenever you leave it. The Exit button at the top of every screen blanks the app
-            at once; press and hold the blank screen to come back.
+            A PIN keeps NewVoice locked whenever you leave it. It's optional. Exit, at the top of every screen, blanks
+            the app at once; press and hold the blank screen to come back.
           </Body>
           {pinSet ? (
-            <Body>PIN is set.</Body>
+            <Card>
+              <Body>PIN is set.</Body>
+            </Card>
           ) : settingPin ? (
             <PinSetup
               onDone={async () => {
@@ -201,14 +269,13 @@ export default function Onboarding() {
           ) : (
             <Button label="Set a PIN" kind="secondary" onPress={() => setSettingPin(true)} />
           )}
-          {settingPin ? null : nav()}
-        </Screen>
+        </StepScreen>
       );
 
     case 'safety':
       return (
-        <Screen>
-          <Title>Looking after your voice</Title>
+        <StepScreen key={step} {...nav} action="I understand" onAction={() => void finish()}>
+          <Display>Looking after your voice</Display>
           <Body>Voice training is safe when it's gentle. NewVoice builds these in:</Body>
           <Bullet>Every session starts with a short warm-up and ends with a cool-down.</Bullet>
           <Bullet>Short sessions work best: about 10–20 minutes, a few times a day, not one long one.</Bullet>
@@ -222,10 +289,7 @@ export default function Onboarding() {
             If hoarseness lasts more than about two weeks, speaking hurts, or you cough up blood, see an ENT doctor or
             laryngologist, and a speech-language pathologist.
           </Body>
-          <Gap />
-          <Button label="I understand" onPress={() => void finish()} />
-          <Button label="Back" kind="secondary" onPress={back} />
-        </Screen>
+        </StepScreen>
       );
   }
 }
