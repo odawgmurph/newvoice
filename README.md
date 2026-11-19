@@ -52,10 +52,16 @@ Reference norms:
 cd harness && uv run python -m norms.build_norms
 ```
 
-App:
+App (typecheck and unit tests):
 
 ```bash
-cd app && npm ci && npm run typecheck
+cd app && npm ci && npm run typecheck && npm test
+```
+
+After changing the database schema (`app/src/db/schema.ts`), generate and commit a migration:
+
+```bash
+cd app && npm run db:generate
 ```
 
 ## License
