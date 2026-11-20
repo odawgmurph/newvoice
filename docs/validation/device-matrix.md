@@ -1,6 +1,6 @@
 # Stage 2 device matrix
 
-One row per phone and input (built-in mic, wired headset, Bluetooth), scored by `harness/validation/device.py` from a test clip exported by the app. The Stage 2 exit criteria are in [`../build-plan.md`](../build-plan.md) (Stage 2): mic-to-screen under 100 ms, a steady 60 fps, and per-frame cost well inside the 10 ms hop.
+One row per phone and input (built-in mic, wired headset, Bluetooth), scored by `harness/validation/device.py` from a test clip exported by the app. Under D14 the owner's iPhone is the only tested device, so its rows decide the Stage 2 exit; anyone else is welcome to add a row for their phone in a PR. The Stage 2 exit criteria are in [`../build-plan.md`](../build-plan.md) (Stage 2): mic-to-screen under 100 ms, a steady 60 fps, and per-frame cost well inside the 10 ms hop.
 
 ## Recording a clip (on the phone)
 
