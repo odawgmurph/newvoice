@@ -143,6 +143,11 @@ Evidence for each choice is in [`validation/stage1-real.md`](validation/stage1-r
 - **Privacy.** This is the only path where audio is written to disk, and it only runs when the user taps *Record test clip*. The clip stays in memory until exported, the export lives in the app's temporary folder, each export deletes the one before, and nothing leaves the phone unless the user picks a destination in the share sheet. Clips are not committed to the repo; only scored rows are.
   - **Pending decision:** before the Stage 8 beta, this has to move behind a developer setting or out of release builds, since the handbook's privacy model is audio processed on the device by default (Stage 4 privacy work).
 - **Not compiled here.** The Swift was written without a Mac. The `ios-app.yml` workflow compiles it, and the first real export is its end-to-end test.
+- **First export (Nov 21, owner's iPhone, built-in mic).** It worked end to end, and showed two bugs, now fixed: missing values were written as the string `"<null>"` instead of `null` (`jsonSafe` turned `NSNull` into its description), and the start-of-clip capture info reported the previous clip's length. `device.py` reads files from the buggy build, and scores the budget from the JSON alone when the WAV isn't next to it.
+- **Pending decision: live look-ahead.** Mic→screen came in at 104 ms median (108 p95) against the handbook's ~100 ms. 80 ms of it is analysis lag: `Config::lookahead_frames` = 5 (50 ms) plus ~30 ms of window. Options:
+  - *Keep 5 frames* and accept ~105 ms. The jump guard keeps confirming 50 ms runs before a pitch jump is drawn.
+  - *Cut to 2 frames* (the median filter's radius, its minimum): about 30 ms less, so ~75 ms. Where the jump guard needed more look-ahead, a streamed frame can then differ from the batch frame, so the trace may briefly show an octave jump that the stored recording won't.
+  - Recommended: 2 frames for the live trace only, after checking on LibriSpeech how often the streamed and batch tracks then differ; recordings keep full look-ahead because they go through batch analysis.
 
 ## D14 · Stage 2 device testing is the owner's iPhone only (supersedes the device matrix)
 

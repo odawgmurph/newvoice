@@ -238,6 +238,8 @@ enum Diagnostics {
       return mirror.children.first.map { jsonSafe($0.value) } ?? NSNull()
     }
     switch value {
+    case is NSNull:
+      return value
     case let n as NSNumber:
       // Booleans bridge to kCFBoolean and keep their type.
       if CFGetTypeID(n) == CFBooleanGetTypeID() { return n }

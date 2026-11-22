@@ -131,10 +131,10 @@ final class CaptureSession {
       // Starts with the capture, so clip sample 0 is analyser sample 0 and
       // frame times line up with the clip exactly.
       recordingLimit = Int(seconds * format.sampleRate)
+      lastClip = nil
       var clip = TestClip(sampleRate: format.sampleRate, settings: settings, startInfo: info())
       clip.samples.reserveCapacity(recordingLimit + 4096)
       recording = clip
-      lastClip = nil
     }
 
     observe(session)

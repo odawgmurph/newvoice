@@ -58,15 +58,20 @@ CORE_TOLERANCE = 0.001
 MIN_FORMANT_CONFIDENCE = 0.5
 
 
+# App builds before the jsonSafe fix wrote missing values as the string "<null>".
+_MISSING = (None, "<null>")
+
+
 def _array(values) -> np.ndarray:
-    return np.array([np.nan if v is None else v for v in values], dtype=float)
+    return np.array([np.nan if v in _MISSING else v for v in values], dtype=float)
 
 
 @dataclass
 class Export:
     path: Path
     report: dict
-    signal: np.ndarray = field(repr=False)
+    # None when the WAV isn't next to the JSON: only the budget is scored.
+    signal: np.ndarray | None = field(repr=False)
     rate: int
     # Phone frames as columns: t, f0Hz, f1Hz, f2Hz, f3Hz, formantConfidence, ...
     frames: dict[str, np.ndarray] = field(repr=False)
@@ -88,15 +93,12 @@ def load(path: Path) -> Export:
             f"{report.get('format')} v{report.get('formatVersion')}"
         )
     wav = path.with_name(report["wav"])
-    sound = parselmouth.Sound(str(wav))
     frames = {k: _array(v) for k, v in report["frames"].items()}
-    return Export(
-        path=path,
-        report=report,
-        signal=sound.values[0].astype(float),
-        rate=int(sound.sampling_frequency),
-        frames=frames,
-    )
+    signal, rate = None, int(report["clip"]["sampleRate"])
+    if wav.exists():
+        sound = parselmouth.Sound(str(wav))
+        signal, rate = sound.values[0].astype(float), int(sound.sampling_frequency)
+    return Export(path=path, report=report, signal=signal, rate=rate, frames=frames)
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +227,10 @@ def budget(e: Export) -> dict:
     return {
         "mic_to_screen_median_ms": _stat(app.get("micToScreenMs"), "median"),
         "mic_to_screen_p95_ms": m2s_p95,
+        # The parts of the estimate (medians): where the time goes.
+        "input_latency_ms": _stat(app.get("inputLatencyMs"), "median"),
+        "analysis_lag_ms": _stat(app.get("analysisLagMs"), "median"),
+        "bridge_ms": _stat(app.get("bridgeMs"), "median"),
         "ui_fps_median": fps,
         "bench_us_per_frame": bench_us,
         "live_us_per_frame": _stat(r.get("liveCost"), "usPerFrame"),
@@ -253,9 +259,9 @@ def evaluate(e: Export) -> dict:
             f"{i['name']} ({i['type']})" for i in e.report["captureAtStart"].get("inputs", [])
         ),
         "clip_s": e.report["clip"]["seconds"],
-        "core": core_agreement(e),
-        "pitch": pitch_vs_praat(e),
-        "formants": formants_vs_praat(e),
+        "core": core_agreement(e) if e.signal is not None else None,
+        "pitch": pitch_vs_praat(e) if e.signal is not None else None,
+        "formants": formants_vs_praat(e) if e.signal is not None else None,
         "budget": budget(e),
     }
 
@@ -280,8 +286,11 @@ TABLE_HEADER = (
 
 
 def table_row(r: dict) -> str:
-    b, p, f, c = r["budget"], r["pitch"], r["formants"], r["core"]
-    ok = b["passes"]
+    b, ok = r["budget"], r["budget"]["passes"]
+    nan = float("nan")
+    p = r["pitch"] or {"within_1pct": nan, "gross": nan}
+    f = r["formants"] or {}
+    c = r["core"] or {"f0_agreement": nan}
     return (
         f"| {r['device']['model']} | {r['device']['system']} | {r['route']} "
         f"| {'yes' if b['measurement_mode'] else '**no**'} "
@@ -307,9 +316,20 @@ def markdown(r: dict) -> str:
         f"{_num(b['bench_us_per_frame'])} µs/frame benchmarked, "
         f"{_num(b['live_us_per_frame'])} µs/frame live (worst tick "
         f"{_num(b['live_max_tick_us'])} µs); {b['dropped_samples']} dropped samples.",
+        f"- **Latency parts** (medians): input {_num(b['input_latency_ms'])} ms + analysis "
+        f"look-ahead {_num(b['analysis_lag_ms'])} ms + bridge {_num(b['bridge_ms'])} ms "
+        f"+ one UI frame.",
         f"- **Capture:** measurement mode {'held' if b['measurement_mode'] else '**not held**'}"
         + ("; **route changed during the clip**" if b["route_changed"] else "")
         + ".",
+    ]
+    if p is None:
+        lines.append(
+            "- **Accuracy:** not scored; put the WAV next to the JSON to compare with Praat "
+            "and the desktop core."
+        )
+        return "\n".join(lines)
+    lines += [
         f"- **F0 vs Praat:** {_pct(p['within_1pct'])} within 1%, {_pct(p['gross'])} gross "
         f"errors over {p['frames']} frames; voicing recall {_pct(p['recall'])}, "
         f"false voicing {_pct(p['false_voicing'])}.",

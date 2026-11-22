@@ -131,3 +131,24 @@ def test_other_formats_are_refused(export, tmp_path):
     path.write_text(json.dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="expected newvoice-diagnostics"):
         device.load(path)
+
+
+def test_json_alone_scores_the_budget_and_reads_old_nulls(export, tmp_path):
+    # Builds before the jsonSafe fix wrote missing values as "<null>"; and the
+    # owner may send the JSON without the WAV.
+    report = dict(export.report)
+    report["frames"] = {
+        k: ["<null>" if v is None else v for v in col] for k, col in report["frames"].items()
+    }
+    path = tmp_path / "nv-json-only.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    e = device.load(path)
+    assert e.signal is None
+    assert np.isnan(e.frames["f0Hz"]).sum() == sum(
+        v is None for v in export.report["frames"]["f0Hz"]
+    )
+    r = device.evaluate(e)
+    assert r["pitch"] is None and r["core"] is None
+    assert r["budget"]["passes"]["latency"]
+    assert "not scored" in device.markdown(r)
+    assert device.table_row(r).count("|") == device.TABLE_HEADER.splitlines()[0].count("|")
