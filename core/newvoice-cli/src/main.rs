@@ -4,6 +4,7 @@
 //!
 //! ```text
 //! newvoice-cli frames <wav> [--algorithm yin|mpm|pyin] [--ceiling HZ] [--raw-formants] [--no-formants]
+//!                    [--stream [--lookahead N] [--chunk N]]   (live analyser instead of batch)
 //! newvoice-cli vowel  <wav> [--ceiling HZ]... [--vowel CODE] [--start S --end S] [--max-bandwidth HZ]
 //!                    (CODE adds the resonance score; --start/--end give known boundaries)
 //! newvoice-cli quality <wav> [--algorithm yin|mpm|pyin] [--ceiling HZ]
@@ -23,7 +24,7 @@ use newvoice_core::quality::spectral::FrameSpectral;
 use newvoice_core::quality::{QUALITY_VERSION, QualityConfig, quality_with_tracks};
 use newvoice_core::resonance::{RESONANCE_SCORE_VERSION, delta_f_position};
 use newvoice_core::{
-    Config, StreamAnalyser, VowelConfig, analyse, measure_vowel, measure_vowel_between,
+    Analysis, Config, StreamAnalyser, VowelConfig, analyse, measure_vowel, measure_vowel_between,
 };
 use newvoice_core::{VowelNorm, VowelToken, resonance_score};
 use serde_json::{Value, json};
@@ -80,6 +81,8 @@ struct Options {
     start_s: Option<f64>,
     end_s: Option<f64>,
     max_bandwidth_hz: Option<f64>,
+    stream: bool,
+    lookahead: Option<usize>,
 }
 
 impl Options {
@@ -111,6 +114,8 @@ impl Options {
                 "--start" => o.start_s = Some(number(&value(a)?)?),
                 "--end" => o.end_s = Some(number(&value(a)?)?),
                 "--max-bandwidth" => o.max_bandwidth_hz = Some(number(&value(a)?)?),
+                "--stream" => o.stream = true,
+                "--lookahead" => o.lookahead = Some(number(&value(a)?)? as usize),
                 "--vowel" => {
                     let code = value(a)?;
                     o.vowel = Some(VowelNorm::find(&code).ok_or(format!("unknown vowel {code}"))?);
@@ -152,6 +157,7 @@ impl Options {
             pitch_algorithm: self.algorithm,
             smoothing,
             formants: (!self.no_formants).then(|| self.formant_config()),
+            lookahead_frames: self.lookahead.unwrap_or(Config::default().lookahead_frames),
             ..Config::default()
         }
     }
@@ -197,7 +203,11 @@ fn opt(v: Option<f64>) -> Value {
 }
 
 fn frames(samples: &[f32], rate: f64, opts: &Options) -> Value {
-    let a = analyse(samples, rate, &opts.config());
+    let a = if opts.stream {
+        stream(samples, rate, opts)
+    } else {
+        analyse(samples, rate, &opts.config())
+    };
     let frames: Vec<Value> = a
         .frames
         .iter()
@@ -287,6 +297,25 @@ fn vowel(samples: &[f32], rate: f64, opts: &Options) -> Value {
             })),
             })
         }
+    }
+}
+
+/// The live analyser's frames for the whole file, pushed in `--chunk` sample
+/// chunks, as the phone produces them.
+fn stream(samples: &[f32], rate: f64, opts: &Options) -> Analysis {
+    let mut s = StreamAnalyser::new(rate, opts.config());
+    let mut frames = Vec::new();
+    for chunk in samples.chunks(opts.chunk.max(1)) {
+        s.push(chunk);
+        frames.extend(s.drain());
+    }
+    s.finish();
+    frames.extend(s.drain());
+    Analysis {
+        sample_rate: rate,
+        duration_s: samples.len() as f64 / rate,
+        hop_s: opts.config().hop_s,
+        frames,
     }
 }
 

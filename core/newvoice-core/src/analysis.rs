@@ -43,8 +43,12 @@ pub struct Config {
     /// Per-frame formants, or `None` to skip them (pitch only).
     pub formants: Option<FormantConfig>,
     /// Streaming only: frames of look-ahead before a frame is emitted. It
-    /// must cover the median filter radius; 5 frames (50 ms) also lets the
-    /// jump guard confirm a 50 ms run.
+    /// must cover the median filter radius. The default, 4 frames (40 ms), is
+    /// `min_run_frames - 1`: enough for the jump guard to confirm the run a
+    /// frame starts, so the live trace never draws a short octave jump that
+    /// the batch track rejects. Only the median's neighbours can still
+    /// differ from batch; full equality needs `min_run_frames - 1 + radius`
+    /// (6). Decision D16, evidence in `docs/validation/live-lookahead.md`.
     pub lookahead_frames: usize,
 }
 
@@ -62,7 +66,7 @@ impl Default for Config {
             smoothing: SmoothConfig::default(),
             pyin: PyinConfig::default(),
             formants: Some(FormantConfig::default()),
-            lookahead_frames: 5,
+            lookahead_frames: 4,
         }
     }
 }
@@ -675,6 +679,69 @@ mod tests {
             assert_eq!(frames.len(), batch.frames.len(), "chunk={chunk}");
             assert_eq!(frames, batch.frames, "chunk={chunk}");
         }
+    }
+
+    /// A steady 150 Hz voice with a short burst an octave up: batch analysis
+    /// rejects the 45 ms burst as an octave jump (shorter than 50 ms).
+    fn octave_blip() -> Vec<f32> {
+        let n = (0.6 * RATE) as usize;
+        let (from, to) = ((0.3 * RATE) as usize, (0.345 * RATE) as usize);
+        let contour: Vec<f64> = (0..n)
+            .map(|i| {
+                if (from..to).contains(&i) {
+                    300.0
+                } else {
+                    150.0
+                }
+            })
+            .collect();
+        let mut x = harmonic_source(&contour, RATE);
+        resonate(
+            &mut x,
+            &[(700.0, 80.0), (1200.0, 90.0), (2600.0, 120.0)],
+            RATE,
+        );
+        let peak = x.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+        to_f32(&x.iter().map(|v| 0.5 * v / peak).collect::<Vec<_>>())
+    }
+
+    fn streamed(x: &[f32], cfg: &Config) -> Vec<Frame> {
+        let mut s = StreamAnalyser::new(RATE, cfg.clone());
+        let mut frames = Vec::new();
+        for c in x.chunks(441) {
+            s.push(c);
+            frames.extend(s.drain());
+        }
+        s.finish();
+        frames.extend(s.drain());
+        frames
+    }
+
+    fn octave_frames(frames: &[Frame]) -> usize {
+        frames
+            .iter()
+            .filter(|f| f.f0_hz.is_some_and(|f0| f0 > 200.0))
+            .count()
+    }
+
+    #[test]
+    fn default_lookahead_never_draws_a_rejected_octave_jump() {
+        let x = octave_blip();
+        let cfg = Config::default();
+        let raw = analyse(&x, RATE, &cfg)
+            .frames
+            .iter()
+            .filter(|f| f.f0_raw_hz.is_some_and(|f0| f0 > 200.0))
+            .count();
+        assert!(raw > 0, "the burst should reach the raw track");
+        assert_eq!(octave_frames(&analyse(&x, RATE, &cfg).frames), 0);
+        assert_eq!(octave_frames(&streamed(&x, &cfg)), 0);
+        // With only the median radius of look-ahead the live trace draws it.
+        let short = Config {
+            lookahead_frames: 2,
+            ..Config::default()
+        };
+        assert!(octave_frames(&streamed(&x, &short)) > 0);
     }
 
     #[test]

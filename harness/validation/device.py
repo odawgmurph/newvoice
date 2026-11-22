@@ -6,8 +6,10 @@ the phone's live analyser received, from capture start, so frame k of the
 phone and frame k of any analysis of the WAV sit at the same time. Each clip
 answers three questions:
 
-1. **Does the phone compute what the core computes?** The desktop core runs
-   on the same WAV. Streaming and batch analysis give identical frames
+1. **Does the phone compute what the core computes?** The desktop core
+   streams the same WAV with the phone's look-ahead (`lookaheadFrames` in the
+   report; 5 for exports made before D16 added the field). Streaming gives
+   the same frames for any chunking
    (`streaming_matches_batch_for_any_chunking`), so any difference comes from
    the phone build or from capture: ARM floating point, FFI marshalling, or
    samples dropped before analysis.
@@ -115,6 +117,9 @@ def core_agreement(e: Export) -> dict:
         options += ["--ceiling", str(ceiling)]
     algorithm = str(e.report["settings"].get("pitchAlgorithm", "yin")).lower()
     options += ["--algorithm", algorithm]
+    # Exports before D16 don't record the look-ahead; those builds used 5.
+    lookahead = int(e.report["settings"].get("lookaheadFrames", 5))
+    options += ["--stream", "--lookahead", str(lookahead)]
     desk = core.run("frames", e.wav, *options)
     d = desk["frames"]
 
