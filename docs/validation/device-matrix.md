@@ -42,7 +42,7 @@ The accuracy columns are empty until the clip's WAV is scored; only the JSON was
 
 ### Notes on the first clip (Nov 21, built-in mic, 26.2 s)
 
-- **Latency misses by about 8 ms, and the analyser's look-ahead is why.** Median mic→screen is 104 ms (p95 108): input 15.9 ms (10.9 ms hardware + 5 ms I/O buffer) + analysis lag 80 ms + bridge ≈ 0 ms + one UI frame (8.3 ms at 120 Hz). The 80 ms is the `StreamAnalyser`'s 5-frame (50 ms) look-ahead plus about 30 ms of analysis window. The handbook's budget is "under about 100 ms to screen" with a 32–46 ms window, so the window fits and the look-ahead is the excess. See the pending decision in D13.
+- **Latency misses by about 8 ms, and the analyser's look-ahead is why.** Median mic→screen is 104 ms (p95 108): input 15.9 ms (10.9 ms hardware + 5 ms I/O buffer) + analysis lag 80 ms + bridge ≈ 0 ms + one UI frame (8.3 ms at 120 Hz). The 80 ms is the `StreamAnalyser`'s 5-frame (50 ms) look-ahead plus about 30 ms of analysis window. The handbook's budget is "under about 100 ms to screen" with a 32–46 ms window, so the window fits and the look-ahead is the excess. D16 cuts the live look-ahead to 4 frames, which should bring this to about 94 ms median (98 p95); the next clip checks it.
 - **Cost is far inside the budget.** 157 µs/frame benchmarked (1.6% of the 10 ms hop); 649 µs/frame live, worst 5 ms tick 1.4 ms. Live is about 4× the benchmark, likely CPU frequency scaling on a lightly loaded phone; both are well under the 25% (2.5 ms) limit.
 - **Display runs at 120 fps** (ProMotion); the JS thread holds 60. No dropped samples, measurement mode held, standard mic mode.
 - **The export wrote missing values as `"<null>"`** instead of JSON `null` (a bug in the app's JSON writer, fixed in D13). The harness reads both.

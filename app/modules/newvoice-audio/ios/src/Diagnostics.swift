@@ -84,6 +84,7 @@ enum Diagnostics {
         "pitchAlgorithm": String(describing: clip.settings.pitchAlgorithm),
         "formantCeilingHz": clip.settings.formantCeilingHz,
         "silenceDbfs": clip.settings.silenceDbfs,
+        "lookaheadFrames": liveLookaheadFrames(),
       ] as [String: Any?],
       "clip": [
         "sampleRate": clip.sampleRate,

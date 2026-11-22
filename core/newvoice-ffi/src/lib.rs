@@ -22,6 +22,14 @@ pub fn core_version() -> String {
     core::VERSION.to_owned()
 }
 
+/// Frames of look-ahead the live analyser holds before emitting a frame
+/// (decision D16). Diagnostics exports record it so the harness can
+/// reproduce the phone's streamed track.
+#[uniffi::export]
+pub fn live_lookahead_frames() -> u32 {
+    core::Config::default().lookahead_frames as u32
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum PitchAlgorithm {
     Yin,

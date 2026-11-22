@@ -15,6 +15,7 @@ from validation import core, corpus, device, synth
 
 RATE = 48_000
 CEILING_HZ = 5500.0
+LOOKAHEAD = 4  # the live default (D16)
 
 
 def _frame_columns(frames: list[dict]) -> dict:
@@ -48,7 +49,9 @@ def export(tmp_path_factory):
     wav = tmp / "nv-iPhone15_2-builtin-20261118-120000.wav"
     synth.write_wav(wav, x, RATE)
 
-    phone = core.run("frames", wav, "--ceiling", str(CEILING_HZ))
+    phone = core.run(
+        "frames", wav, "--ceiling", str(CEILING_HZ), "--stream", "--lookahead", str(LOOKAHEAD)
+    )
     inputs = [{"type": "MicrophoneBuiltIn", "name": "iPhone Microphone"}]
     capture = {"measurementMode": True, "inputs": inputs}
     report = {
@@ -63,6 +66,7 @@ def export(tmp_path_factory):
             "pitchAlgorithm": "yin",
             "formantCeilingHz": CEILING_HZ,
             "silenceDbfs": -60.0,
+            "lookaheadFrames": LOOKAHEAD,
         },
         "clip": {
             "sampleRate": RATE,

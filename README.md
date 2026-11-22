@@ -46,6 +46,12 @@ cd harness && uv run python -m validation.report
 cd harness && uv run python -m validation.report_real
 ```
 
+Live look-ahead (streamed vs batch pitch; after any change to the jump guard or median filter):
+
+```bash
+cd harness && uv run python -m validation.lookahead
+```
+
 Reference norms:
 
 ```bash
