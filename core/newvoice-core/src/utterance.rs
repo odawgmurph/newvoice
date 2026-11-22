@@ -128,11 +128,8 @@ impl UtteranceSegmenter {
                     self.close();
                 }
             }
-            Some((_, last)) => {
-                if t - last >= self.cfg.end_gap_s {
-                    self.close();
-                }
-            }
+            Some((_, last)) if t - last >= self.cfg.end_gap_s => self.close(),
+            Some(_) => {}
         }
     }
 
@@ -360,7 +357,14 @@ mod tests {
             ..QualityConfig::default()
         };
         std::iter::from_fn(|| seg.pop())
-            .map(|u| summarise(&u, &q, &UtteranceConfig::default(), &UtteranceContext::default()))
+            .map(|u| {
+                summarise(
+                    &u,
+                    &q,
+                    &UtteranceConfig::default(),
+                    &UtteranceContext::default(),
+                )
+            })
             .collect()
     }
 

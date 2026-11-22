@@ -23,7 +23,8 @@ pub use analysis::{Analysis, Config, Frame, StreamAnalyser, analyse};
 pub use quality::{QualityConfig, VoiceQuality, measure_quality};
 pub use resonance::{ResonanceScore, VowelNorm, VowelToken, resonance_score};
 pub use utterance::{
-    UtteranceAudio, UtteranceConfig, UtteranceContext, UtteranceSegmenter, UtteranceSummary, summarise,
+    UtteranceAudio, UtteranceConfig, UtteranceContext, UtteranceSegmenter, UtteranceSummary,
+    summarise,
 };
 pub use vowel::{VowelConfig, VowelMeasurement, measure_vowel, measure_vowel_between};
 
