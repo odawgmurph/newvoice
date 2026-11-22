@@ -10,7 +10,7 @@ export type {
 } from '../../modules/newvoice-audio/src/NewVoiceAudio.types.ts';
 
 /** Mirrors GOALS in src/db/schema.ts (kept here so this file has no imports Node can't strip). */
-export type Goal = 'feminine' | 'androgynous' | 'flexible' | 'own';
+export type Goal = 'feminine' | 'androgynous' | 'flexible' | 'own'; // audit: goal key
 
 /** The three trained dimensions plus intonation. */
 export type Dimension = 'pitch' | 'resonance' | 'weight' | 'intonation';

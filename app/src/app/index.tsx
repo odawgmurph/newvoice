@@ -25,8 +25,12 @@ export default function Home() {
       <Overline>Coming next</Overline>
       <Title>Lessons</Title>
       <Card>
-        <Body>The lesson path arrives in a later stage. For now you can try the live trace.</Body>
-        <Button label="Live pitch and resonance trace" onPress={() => router.push('/capture')} />
+        <Body>
+          The lesson path arrives in a later stage. For now you can practise with live feedback on pitch and
+          brightness.
+        </Body>
+        <Button label="Practice feedback" onPress={() => router.push('/practice')} />
+        <Button label="Capture test" kind="secondary" onPress={() => router.push('/capture')} />
       </Card>
       <Button label="Settings" kind="secondary" onPress={() => router.push('/settings')} />
     </Screen>

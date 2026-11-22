@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD `gendered_bands` integer DEFAULT false NOT NULL;
