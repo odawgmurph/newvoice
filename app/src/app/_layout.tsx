@@ -57,6 +57,7 @@ function Gate() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+      <Stack.Screen name="practice" options={{ title: 'Practice feedback' }} />
       <Stack.Screen
         name="capture"
         options={{

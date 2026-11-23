@@ -10,7 +10,7 @@ NewVoice is an education app. It is not therapy and does not diagnose or treat a
 - formants, vocal tract length and the resonance score
 - the voice-quality measures (H1–H2, alpha ratio, CPPS, HNR, jitter, shimmer, weight index)
 
-It is validated against Praat on synthetic audio, on hand-checked Hillenbrand vowels, and on LibriSpeech speech (clean, noisy and through a telephone channel). See the reports: [synthetic](docs/validation/stage1-synthetic.md) and [real recordings](docs/validation/stage1-real.md). Next is Stage 2, the native capture spike; see [`docs/build-plan.md`](docs/build-plan.md).
+It is validated against Praat on synthetic audio, on hand-checked Hillenbrand vowels, and on LibriSpeech speech (clean, noisy and through a telephone channel). See the reports: [synthetic](docs/validation/stage1-synthetic.md) and [real recordings](docs/validation/stage1-real.md). Stage 3, the feedback engine (baseline-relative zones, neutral labels, the strain monitor and the feedback views), is done; see the [strain-monitor report](docs/validation/stage3-strain.md). Stage 2 (capture) and Stage 4 (app shell) are in progress; see [`docs/build-plan.md`](docs/build-plan.md).
 
 ## Repository
 
@@ -50,6 +50,16 @@ Live look-ahead (streamed vs batch pitch; after any change to the jump guard or 
 
 ```bash
 cd harness && uv run python -m validation.lookahead
+```
+
+Strain-monitor sessions and report (after any change to the utterance summaries or the strain rules; `--real` also rebuilds the LibriSpeech sessions, which needs the 338 MB dev-clean download):
+
+```bash
+cd harness && uv run python -m validation.strain --real
+```
+
+```bash
+cd harness && uv run python -m validation.strain --report
 ```
 
 Reference norms:

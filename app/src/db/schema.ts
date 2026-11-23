@@ -34,6 +34,12 @@ export const user = sqliteTable('user', {
   playbackEnabled: integer('playback_enabled', { mode: 'boolean' }).notNull().default(false),
   /** Metrics-only: keep the numbers, never keep the audio. */
   metricsOnly: integer('metrics_only', { mode: 'boolean' }).notNull().default(true),
+  /**
+   * Opt-in: name the two reference groups and draw their bands on the
+   * feedback views. Off by default; labels stay neutral without it
+   * (handbook §3.6, §4.3; decision D2).
+   */
+  genderedBands: integer('gendered_bands', { mode: 'boolean' }).notNull().default(false),
   safetyPrimerAckAt: integer('safety_primer_ack_at', { mode: 'timestamp_ms' }),
   onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
   /** The baseline recording set (Stage 4 baseline capture). */

@@ -10,6 +10,41 @@ struct StartOptions: Record {
   /// capture stops by itself at the end.
   @Field
   var recordSeconds: Double? = nil
+
+  /// The vowel an exercise asks for (Hillenbrand code or IPA); enables
+  /// resonance scores on frames and utterances.
+  @Field
+  var vowel: String? = nil
+
+  /// The user's weight-index baseline; enables weight indexes.
+  @Field
+  var weightBaseline: WeightBaselineOptions? = nil
+}
+
+struct FeatureStatsOptions: Record {
+  @Field
+  var mean: Double = 0
+
+  @Field
+  var sd: Double = 0
+
+  var core: FeatureStats { FeatureStats(mean: mean, sd: sd) }
+}
+
+/// `WeightBaseline` from JavaScript (see NewVoiceAudio.types.ts).
+struct WeightBaselineOptions: Record {
+  @Field
+  var h1cH2cDb: FeatureStatsOptions? = nil
+
+  @Field
+  var alphaRatioDb: FeatureStatsOptions? = nil
+
+  @Field
+  var cppsDb: FeatureStatsOptions? = nil
+
+  var core: WeightBaseline {
+    WeightBaseline(h1cH2cDb: h1cH2cDb?.core, alphaRatioDb: alphaRatioDb?.core, cppsDb: cppsDb?.core)
+  }
 }
 
 /// The JavaScript face of `CaptureSession`. Only computed frames and
@@ -20,7 +55,7 @@ public class NewVoiceAudioModule: Module {
   public func definition() -> ModuleDefinition {
     Name("NewVoiceAudio")
 
-    Events("onFrames", "onCaptureInfo")
+    Events("onFrames", "onCaptureInfo", "onUtterance")
 
     OnCreate {
       self.capture.onFrames = { [weak self] batch in
@@ -28,6 +63,9 @@ public class NewVoiceAudioModule: Module {
       }
       self.capture.onInfo = { [weak self] info in
         self?.sendEvent("onCaptureInfo", info)
+      }
+      self.capture.onUtterance = { [weak self] utterance in
+        self?.sendEvent("onUtterance", utterance)
       }
     }
 
@@ -42,7 +80,10 @@ public class NewVoiceAudioModule: Module {
           return
         }
         self.capture.start(
-          formantCeilingHz: options.formantCeilingHz, recordSeconds: options.recordSeconds
+          formantCeilingHz: options.formantCeilingHz,
+          recordSeconds: options.recordSeconds,
+          vowel: options.vowel,
+          weightBaseline: options.weightBaseline?.core
         ) { result in
           switch result {
           case .success(let info): promise.resolve(info)

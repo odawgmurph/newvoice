@@ -11,7 +11,12 @@ import type {
 declare class NewVoiceAudioModule extends NativeModule<NewVoiceAudioModuleEvents> {
   /** Version of the Rust analysis core linked into the app. */
   coreVersion(): string;
-  /** Asks for the microphone if needed, then starts live analysis. */
+  /**
+   * Asks for the microphone if needed, then starts live analysis. With
+   * `vowel` and `weightBaseline`, frames and utterances carry resonance and
+   * weight-index scores; finished utterances arrive as `onUtterance` events
+   * (also after `stop`, for the last one). Rejects for an unknown vowel.
+   */
   start(options: StartOptions): Promise<CaptureInfo>;
   stop(): Promise<void>;
   getCaptureInfo(): Promise<CaptureInfo>;
