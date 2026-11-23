@@ -215,8 +215,11 @@ pub struct PitchSummary {
     pub voiced_s: f64,
     pub median_hz: f64,
     pub median_st: f64,
+    /// 5th and 95th percentiles: on a glide, the comfortable range (handbook E2).
+    pub p5_st: f64,
     pub p10_st: f64,
     pub p90_st: f64,
+    pub p95_st: f64,
     pub sd_st: f64,
     pub range_5_95_st: f64,
 }
@@ -247,8 +250,10 @@ pub fn analyse_recording(
             voiced_s: s.voiced_s,
             median_hz: s.median_hz,
             median_st: s.median_st,
+            p5_st: s.p5_st,
             p10_st: s.p10_st,
             p90_st: s.p90_st,
+            p95_st: s.p95_st,
             sd_st: s.sd_st,
             range_5_95_st: s.range_5_95_st,
         }),

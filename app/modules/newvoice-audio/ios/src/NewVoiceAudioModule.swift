@@ -12,6 +12,31 @@ struct StartOptions: Record {
   var recordSeconds: Double? = nil
 }
 
+struct AnalyseOptions: Record {
+  /// "vowel", "glide" or "speech" (see `TaskKind`).
+  @Field
+  var kind: String = "speech"
+
+  /// Where to keep the audio, relative to Documents and inside
+  /// "recordings/", e.g. "recordings/baseline-1/vowel-a.wav". Omit to keep
+  /// no audio (metrics-only).
+  @Field
+  var saveAs: String? = nil
+}
+
+struct ResonanceTokenRecord: Record {
+  @Field
+  var vowel: String = ""
+  @Field
+  var f1Hz: Double? = nil
+  @Field
+  var f2Hz: Double? = nil
+  @Field
+  var f3Hz: Double? = nil
+  @Field
+  var weight: Double = 1
+}
+
 /// The JavaScript face of `CaptureSession`. Only computed frames and
 /// capture diagnostics cross into JavaScript, never audio.
 public class NewVoiceAudioModule: Module {
@@ -74,6 +99,49 @@ public class NewVoiceAudioModule: Module {
           }
         }
       }
+    }
+
+    // Batch analysis of the clip just recorded with `start({recordSeconds})`.
+    AsyncFunction("analyseLastClip") { (options: AnalyseOptions, promise: Promise) in
+      guard let kind = TaskKind(rawValue: options.kind) else {
+        promise.reject("E_ANALYSE", "Unknown task kind \(options.kind).")
+        return
+      }
+      let saveAs: URL?
+      do {
+        saveAs = try options.saveAs.map(TaskAnalysis.recordingURL)
+      } catch {
+        promise.reject("E_ANALYSE", error.localizedDescription)
+        return
+      }
+      self.capture.analyseLastClip(kind: kind, saveAs: saveAs) { result in
+        switch result {
+        case .success(let value): promise.resolve(value)
+        case .failure(let error): promise.reject("E_ANALYSE", error.localizedDescription)
+        }
+      }
+    }
+
+    AsyncFunction("discardLastClip") { (promise: Promise) in
+      self.capture.discardLastClip { promise.resolve(nil) }
+    }
+
+    // The resonance score over measured vowel tokens (D11). Null score when
+    // no token has a scorable formant.
+    Function("resonanceScore") { (tokens: [ResonanceTokenRecord]) throws -> [String: Any] in
+      let result = try resonanceScore(tokens: tokens.map {
+        ResonanceToken(vowel: $0.vowel, f1Hz: $0.f1Hz, f2Hz: $0.f2Hz, f3Hz: $0.f3Hz, weight: $0.weight)
+      })
+      let value: [String: Any?] = [
+        "version": result?.version,
+        "score": result?.score,
+        "f1": result?.f1,
+        "f2": result?.f2,
+        "f3": result?.f3,
+        "tokensUsed": result?.tokensUsed ?? 0,
+      ]
+      // swiftlint:disable:next force_cast
+      return Diagnostics.jsonSafe(value) as! [String: Any]
     }
 
     OnDestroy {
