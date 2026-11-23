@@ -15,6 +15,13 @@
       "when": 1795369027031,
       "tag": "0001_clean_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795442827215,
+      "tag": "0002_baseline",
+      "breakpoints": true
     }
   ]
 }

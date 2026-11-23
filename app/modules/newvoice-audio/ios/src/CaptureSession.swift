@@ -339,6 +339,41 @@ final class CaptureSession {
     }
   }
 
+  // MARK: - Task analysis
+
+  /// Analyses the last recorded clip as a task (see `TaskAnalysis`) on a
+  /// background queue, optionally keeping its audio at `saveAs`. The clip
+  /// is dropped from memory first, so its audio is analysed once and never
+  /// kept unless the user asked to keep audio.
+  func analyseLastClip(
+    kind: TaskKind,
+    saveAs: URL?,
+    completion: @escaping (Result<[String: Any], Error>) -> Void
+  ) {
+    queue.async {
+      guard self.engine == nil else {
+        completion(.failure(CaptureError.stillRunning))
+        return
+      }
+      guard let clip = self.lastClip else {
+        completion(.failure(CaptureError.noClip))
+        return
+      }
+      self.lastClip = nil
+      DispatchQueue.global(qos: .userInitiated).async {
+        completion(Result { try TaskAnalysis.analyse(clip: clip, kind: kind, saveAs: saveAs) })
+      }
+    }
+  }
+
+  /// Forgets the last clip without analysing it (a cancelled task).
+  func discardLastClip(completion: @escaping () -> Void) {
+    queue.async {
+      self.lastClip = nil
+      completion()
+    }
+  }
+
   // MARK: - Capability report
 
   /// What iOS actually gave us. `measurementMode` false, a non-standard
@@ -404,6 +439,8 @@ enum CaptureError: LocalizedError {
   case unsupportedFormat(String)
   case stillRunning
   case noTestClip
+  case noClip
+  case badSavePath(String)
   case noViewController
 
   var errorDescription: String? {
@@ -412,6 +449,8 @@ enum CaptureError: LocalizedError {
     case .unsupportedFormat(let f): return "Unsupported input format: \(f)"
     case .stillRunning: return "Stop listening before exporting."
     case .noTestClip: return "Record a test clip first."
+    case .noClip: return "Nothing has been recorded yet."
+    case .badSavePath(let p): return "Can't save a recording at \(p)."
     case .noViewController: return "Couldn't open the share sheet."
     }
   }

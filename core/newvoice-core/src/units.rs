@@ -86,8 +86,12 @@ pub struct PitchStats {
     pub voiced_s: f64,
     pub median_hz: f64,
     pub median_st: f64,
+    /// 5th percentile: the bottom of the comfortable range on a glide (handbook E2).
+    pub p5_st: f64,
     pub p10_st: f64,
     pub p90_st: f64,
+    /// 95th percentile: the top of the comfortable range on a glide.
+    pub p95_st: f64,
     /// Standard deviation in semitones (population SD).
     pub sd_st: f64,
     /// 5th to 95th percentile range in semitones.
@@ -107,15 +111,19 @@ impl PitchStats {
         let mean = st.iter().sum::<f64>() / n;
         let var = st.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n;
         let median_st = percentile_sorted(&st, 50.0);
+        let p5_st = percentile_sorted(&st, 5.0);
+        let p95_st = percentile_sorted(&st, 95.0);
         Some(Self {
             voiced_frames: st.len(),
             voiced_s: n * hop_s,
             median_hz: st_to_hz(median_st),
             median_st,
+            p5_st,
             p10_st: percentile_sorted(&st, 10.0),
             p90_st: percentile_sorted(&st, 90.0),
+            p95_st,
             sd_st: var.sqrt(),
-            range_5_95_st: percentile_sorted(&st, 95.0) - percentile_sorted(&st, 5.0),
+            range_5_95_st: p95_st - p5_st,
         })
     }
 }
@@ -165,6 +173,8 @@ mod tests {
         assert_eq!(s.voiced_frames, 121);
         assert!((s.median_st - 54.0).abs() < 1e-9);
         assert!((s.range_5_95_st - 10.8).abs() < 1e-9);
+        assert!((s.p95_st - s.p5_st - s.range_5_95_st).abs() < 1e-12);
+        assert!(s.p5_st <= s.p10_st && s.p90_st <= s.p95_st);
         assert!((s.p90_st - s.p10_st - 9.6).abs() < 1e-9);
         assert!((s.sd_st - 12.0 / 12f64.sqrt()).abs() < 0.05);
         assert!(PitchStats::from_hz(&[], 0.01).is_none());

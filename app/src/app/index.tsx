@@ -1,17 +1,42 @@
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
-import { useApp } from '../state/AppState';
-import { Body, Button, Card, ExitButton, Overline, Screen, Title } from '../ui/kit';
+import { formatHz, isBaselineSummary, type BaselineSummary } from '../baseline/plan';
+import { currentBaseline } from '../baseline/store';
+import { useApp, useDb } from '../state/AppState';
+import { Body, Button, Caption, Card, ExitButton, Overline, Screen, Title } from '../ui/kit';
 import { type, useTheme } from '../ui/theme';
 
 // Home. The design's lesson path, today's minutes and tab bar arrive with
 // lessons (Stages 5–6); until then this links to what exists.
 export default function Home() {
   const { user, quickExit } = useApp();
+  const db = useDb();
   const { c } = useTheme();
+  // `summary` is null for a provisional baseline from a practice session (Stage 3).
+  const [baseline, setBaseline] = useState<{ summary: BaselineSummary | null; completedAt: Date | null } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      void currentBaseline(db, user?.baselineId).then((row) => {
+        if (!live) return;
+        setBaseline(
+          row
+            ? { summary: isBaselineSummary(row.summary) ? row.summary : null, completedAt: row.completedAt }
+            : null,
+        );
+      });
+      return () => {
+        live = false;
+      };
+    }, [db, user?.baselineId]),
+  );
+
   if (!user?.onboardedAt) return <Redirect href="/onboarding" />;
 
+  const speaking = baseline?.summary?.speaking;
   return (
     <Screen
       edges={['top', 'bottom']}
@@ -22,6 +47,33 @@ export default function Home() {
         </>
       }
     >
+      {user.baselineId == null || (baseline != null && baseline.summary == null) ? (
+        <>
+          <Overline>First step</Overline>
+          <Title>Your starting point</Title>
+          <Card>
+            <Body>
+              Six short recordings, about five minutes. Everything you practise is measured against them.
+            </Body>
+            {user.baselineId != null ? (
+              <Caption>
+                You’re using a starting point from a practice session for now. Recording a full one also finds your
+                comfortable range.
+              </Caption>
+            ) : null}
+            <Button label="Record your starting point" onPress={() => router.push('/baseline')} />
+          </Card>
+        </>
+      ) : (
+        <>
+          <Overline>Your starting point</Overline>
+          <Card>
+            {speaking ? <Body>Everyday speaking pitch: {formatHz(speaking.medianHz)}</Body> : null}
+            {baseline?.completedAt ? <Caption>Recorded {baseline.completedAt.toLocaleDateString()}</Caption> : null}
+            <Button label="Record it again" kind="secondary" onPress={() => router.push('/baseline')} />
+          </Card>
+        </>
+      )}
       <Overline>Coming next</Overline>
       <Title>Lessons</Title>
       <Card>

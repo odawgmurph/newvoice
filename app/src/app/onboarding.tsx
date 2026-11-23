@@ -24,7 +24,8 @@ import {
 // practice environment, language, optional context, an optional PIN, and the
 // safety primer. Layout follows the design canvas's Onboarding board. Copy
 // follows D2 (neutral labels) and D3 (education app: no therapy, treatment,
-// diagnosis or clinical claims). Baseline capture follows in a later iteration.
+// diagnosis or clinical claims). It hands over to baseline capture, which
+// can be put off until later.
 
 type Playback = 'metrics' | 'keep' | 'listen';
 type Context = 'hormones' | 'surgery' | 'both' | 'neither';
@@ -102,7 +103,7 @@ export default function Onboarding() {
     };
     await db.insert(userTable).values(row).onConflictDoUpdate({ target: userTable.id, set: row });
     await refreshUser();
-    router.replace('/');
+    router.replace('/baseline');
   };
 
   const nav = { step, onBack: back, onExit: quickExit, onNext: next };

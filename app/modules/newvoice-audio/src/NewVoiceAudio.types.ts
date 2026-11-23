@@ -152,3 +152,114 @@ export type NewVoiceAudioModuleEvents = {
   /** Each finished utterance's summary (computed off the analysis thread). */
   onUtterance: (utterance: UtteranceSummary) => void;
 };
+
+/** How a recorded task is measured (see TaskAnalysis.swift). */
+export type TaskKind = 'vowel' | 'glide' | 'speech';
+
+export type AnalyseOptions = {
+  kind: TaskKind;
+  /**
+   * Keep the audio at this path, relative to Documents and inside
+   * "recordings/" (e.g. "recordings/baseline-1/vowel-a.wav"). Omit to keep
+   * no audio (metrics-only).
+   */
+  saveAs?: string;
+};
+
+/** Utterance pitch statistics over voiced frames, semitones on the MIDI scale. */
+export type TaskPitch = {
+  voicedS: number;
+  medianHz: number;
+  medianSt: number;
+  p5St: number;
+  p10St: number;
+  p90St: number;
+  p95St: number;
+  sdSt: number;
+};
+
+/** Voice quality (handbook §3.4); only comparable within one qualityVersion. */
+export type TaskQuality = {
+  qualityVersion: number;
+  weightIndexVersion: number;
+  voicedS: number;
+  h1H2Db: number | null;
+  h1cH2cDb: number | null;
+  alphaRatioDb: number | null;
+  hammarbergDb: number | null;
+  lhRatioDb: number | null;
+  cppsDb: number | null;
+  hnrDb: number | null;
+  /** Fractions (0.01 = 1%). */
+  jitterLocal: number | null;
+  shimmerLocal: number | null;
+  periods: number;
+  /** This recording as a weight-index baseline. */
+  weightBaseline: WeightBaseline;
+};
+
+/** A sustained vowel's steady-state formants and vocal tract length. */
+export type TaskVowel = {
+  f0MedianHz: number;
+  /** Formant ceiling the sweep chose; use it for live formants. */
+  ceilingHz: number;
+  f1Hz: number | null;
+  f2Hz: number | null;
+  f3Hz: number | null;
+  f4Hz: number | null;
+  deltaFHz: number | null;
+  avtlCm: number | null;
+  deltaFPosition: number | null;
+  /** 0–1: roughly the chance F1 and F2 are both within 10%. */
+  confidence: number;
+};
+
+/** One analysed task recording, as stored in `recording.features`. */
+export type TaskResult = {
+  formatVersion: number;
+  kind: TaskKind;
+  coreVersion: string;
+  durationS: number;
+  sampleRate: number;
+  capture: {
+    /** False when iOS processed the audio at some point. */
+    measurementMode: boolean;
+    bluetoothInput: boolean;
+    microphoneMode: string | null;
+    droppedSamples: number;
+    stoppedEarly: boolean;
+  };
+  levels: {
+    peakDbfs: number | null;
+    /** Share of samples at full scale. */
+    clippedFraction: number;
+    /** Relative only: compare with the user's own baseline. */
+    voicedLevelMedianDbfs: number | null;
+  };
+  /** Null when nothing was voiced. */
+  pitch: TaskPitch | null;
+  quality: TaskQuality;
+  /** Vowel tasks only; null when no steady vowel was found. */
+  vowel: TaskVowel | null;
+  /** The kept audio file, or null (metrics-only). */
+  audioUri: string | null;
+};
+
+export type ResonanceTokenInput = {
+  /** Hillenbrand code ("iy") or IPA ("i"). */
+  vowel: string;
+  f1Hz: number | null;
+  f2Hz: number | null;
+  f3Hz: number | null;
+  weight: number;
+};
+
+/** The resonance score (a heuristic between two reference means, 0 and 1); score null when nothing was scorable. */
+export type ResonanceScoreResult = {
+  version: number | null;
+  score: number | null;
+  f1: number | null;
+  f2: number | null;
+  f3: number | null;
+  tokensUsed: number;
+};

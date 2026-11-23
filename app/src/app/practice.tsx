@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import NewVoiceAudio from '../../modules/newvoice-audio/src/NewVoiceAudioModule';
-import { recording as recordingTable, session as sessionTable, user as userTable } from '../db/schema';
+import { feedbackBaselineFrom } from '../baseline/plan';
+import { currentBaseline, saveProvisionalBaseline } from '../baseline/store';
+import { session as sessionTable } from '../db/schema';
 import { useApp, useDb } from '../state/AppState';
 import { Body, Button, Caption, ErrorText, Heading } from '../ui/kit';
 import { radius, space, type, useTheme } from '../ui/theme';
@@ -18,7 +20,7 @@ import { PitchTrace } from '../feedback/views/PitchTrace';
 import { EffortPicker, RestPrompt } from '../feedback/views/RestPrompt';
 import { SummaryCard } from '../feedback/views/SummaryCard';
 import { VowelChart, type VowelDot } from '../feedback/views/VowelChart';
-import { f2Position, f2Zone, parseBaseline, pitchZone, provisionalBaseline, stToHz } from '../feedback/zones';
+import { f2Position, f2Zone, pitchZone, provisionalBaseline, stToHz } from '../feedback/zones';
 
 // Stage 3 practice screen: live, summary or replay feedback on pitch and
 // brightness, against the user's starting point and goal, with the strain
@@ -68,8 +70,8 @@ export default function Practice() {
     const id = user?.baselineId;
     if (id == null) return;
     void (async () => {
-      const row = await db.query.recording.findFirst({ where: eq(recordingTable.id, id) });
-      setBaseline(row ? parseBaseline(row.features) : null);
+      const row = await currentBaseline(db, id);
+      setBaseline(row ? feedbackBaselineFrom(row.summary) : null);
     })();
   }, [db, user?.baselineId]);
 
@@ -180,15 +182,7 @@ export default function Practice() {
   const provisional = useMemo(() => provisionalBaseline(utterances, vowel ?? undefined), [utterances, vowel]);
   const saveProvisional = async () => {
     if (!provisional) return;
-    const [row] = await db
-      .insert(recordingTable)
-      .values({
-        taskId: 'baseline.provisional',
-        features: provisional,
-        analysisVersion: NewVoiceAudio.coreVersion(),
-      })
-      .returning({ id: recordingTable.id });
-    await db.update(userTable).set({ baselineId: row.id }).where(eq(userTable.id, 1));
+    await saveProvisionalBaseline(db, provisional, NewVoiceAudio.coreVersion());
     await refreshUser();
     setBaseline(provisional);
     setSaved(true);

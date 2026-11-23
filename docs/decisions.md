@@ -174,7 +174,7 @@ Evidence for each choice is in [`validation/stage1-real.md`](validation/stage1-r
   - **Onboarding follows the Onboarding board:** back · step dots · Exit header, display heading, radio cards with hints, action pinned to the bottom. Home keeps a placeholder until lessons exist; the board's path, today card and tab bar come with Stages 5–6. The capture spike keeps its own dark look.
   - **"stop" is used for errors and the delete-all button.** The design reserves it for hard stops; a destructive, irreversible action is the closest app-shell equivalent. Revisit if the design adds a separate destructive token.
 - **Unit tests** for pure app logic run under Node's built-in test runner (`npm test`), so no test framework is needed yet; CI runs them.
-- **Still to do in Stage 4:** baseline capture, a discreet app name and icon (needs alternate-icon support and the real bundle ID), quiet/whisper mode settings, a quick-exit gesture in addition to the button, and the privacy policy draft. **Pending decision:** whether quick exit should also show a neutral decoy screen instead of black.
+- **Still to do in Stage 4:** ~~baseline capture~~ (done, D20), a discreet app name and icon (needs alternate-icon support and the real bundle ID), quiet/whisper mode settings, a quick-exit gesture in addition to the button, and the privacy policy draft. **Pending decision:** whether quick exit should also show a neutral decoy screen instead of black.
 
 ## D16 · Live look-ahead is 4 frames (settles D13's pending decision)
 
@@ -244,3 +244,49 @@ Evidence: [`validation/stage3-strain.md`](validation/stage3-strain.md), generate
 - **Opt-in naming.** When opted in, the reference areas name the Hillenbrand adult groups. On the map they are each group's speaker-median F0 ±1 SD by ±0.25 on the resonance scale, a visual marker rather than data. The generated norms key the groups `low`/`high`, so the data carries no gendered words.
 - **Copy.** A test keeps the rest-prompt copy education-only: no therapy, treatment or diagnosis (D3).
 - **The advisor review is replaced by the owner's review.** With no advisors (D2), the build plan's "advisors and co-design group review the views" becomes the owner reviewing the views on their iPhone, against the handbook's dysphoria-sensitive defaults (§2.7, §4.3). The Stage 3 Swift compiles and the `.ipa` builds (iOS build run 18). **Done (Nov 22):** the owner reviewed the views on their iPhone with that build and approved them, with no changes. D16's latency confirmation still waits on the next diagnostics clip (Stage 2). The other two exit criteria are met in CI.
+
+## D20 · Baseline capture (Stage 4, second iteration)
+
+The handbook's baseline (§4.3; Unit 0 in §4.1): sustained /a/ /i/ /u/, a glide, a reading passage and 30 s of spontaneous speech. Onboarding now hands over to it, it can be put off ("Not now"), and Home offers it until one is stored, then offers to record it again.
+
+- **Measured on the phone by the Rust core's recording path, not the live analyser.** Each task records with the existing test-clip machinery (`start({ recordSeconds })`), then `analyseLastClip({ kind })` runs `analyse_recording` and `measure_voice_quality` with pYIN (D11's recording default) and, for vowels, `measure_sustained_vowel`. It runs on a background queue in Swift (`TaskAnalysis.swift`). The clip is dropped from memory before analysis starts, so audio is analysed once. Only the computed values reach JavaScript; audio never does.
+- **Audio is kept only when the user chose to keep it** (D15: metrics-only is the default). Native code then writes the WAV to `Documents/recordings/baseline-<id>/<task>.wav` with complete file protection, so it can't be read while the phone is locked. It refuses any path outside `recordings/`. Discarded attempts have their file deleted.
+- **What each task gives.** Vowels: steady-state F1–F4, the chosen formant ceiling, ΔF/aVTL and formant confidence. Glide: pitch percentiles. Reading and spontaneous speech: pitch statistics, voice quality and the weight-index baseline. Every recording also stores whether iOS honoured measurement mode, Bluetooth input, the iOS mic mode, dropped samples, clipping and the median level of voiced frames. Levels are relative only (handbook §3.1).
+- **The core now reports the 5th and 95th F0 percentiles** (`PitchStats::p5_st`, `p95_st`; also in the FFI and `newvoice-cli` output). The comfortable range is the glide's 5th–95th percentile (handbook E2). It already reported their difference.
+- **The stored summary** (`BaselineSummary`, version 1, in `app/src/baseline/plan.ts`):
+  - **Everyday speaking pitch** comes from spontaneous speech, falling back to the reading. The handbook notes that conversation generalises better than passages (E16).
+  - **Comfortable range** is the glide's p5–p95. Its **ceiling is the glide's p90**: the handbook's "never reward F0 above the user's comfortable 90th percentile" (§2.4, §3.9). Stage 3's strain monitor and Stage 5's exercises read it from here.
+  - **The resonance score** is computed over the three vowels, each weighted by its formant confidence (D11).
+  - **The formant ceiling** is the median of the three vowels' chosen ceilings, for use in live analysis. **ΔF/aVTL** is the median over the vowels, since one vowel's ΔF is noisy.
+  - **The weight-index baseline** comes from the reading, which has fixed phonetic content, falling back to spontaneous speech. The handbook's weight index is "relative to the user's baseline" and names no task (§3.4).
+  - **Voice quality** is stored for the sustained /a/ and for the reading, for strain trends later.
+- **Checks on each recording.** A failed check means the recording isn't usable and must be done again. A warning lets the user keep it or try again.
+  - Fails: less voiced audio than the task needs. The handbook asks for at least 1–2 s (§3.1); vowels need 1.5 s of a 4 s hold, the glide and reading 2 s, spontaneous speech 5 s. More than 0.1% of samples at full scale (clipping). For vowels, no steady vowel found. For spontaneous speech, stopping before 20 s.
+  - Warns: formant confidence under 0.5, the point where F1/F2 are as likely wrong as right (D11). A glide narrower than 4 ST; the message never asks the user to push further (E2: "never push range in one session"). Bluetooth input, a non-standard iOS mic mode, a session that wasn't in measurement mode, or dropped samples.
+  - The 4 ST and 0.1% figures are heuristics, not handbook values. They need checking against real baselines.
+- **No live pitch while recording,** only a level meter and a countdown. The baseline should capture the everyday voice, not one steered by a readout.
+- **Results use neutral words** (D2). The summary shows speaking pitch (Hz and nearest note), the comfortable range and where its ceiling sits, and per-vowel formants. The resonance score is stored but not shown as a number, so a 0–1 position between two reference groups isn't read as a gender score. There's no pass/fail.
+- **Reading text: six CAPE-V sentences** (handbook E16). They are short, freely used for voice assessment, and each stresses different sounds.
+- **Storage.** A new `baseline` table (migration `0002_baseline`): `completed_at`, `summary` JSON, `session_id` and `analysis_version`. `recording.baseline_id` ties each task recording to its baseline and is deleted with it. `user.baseline_id` points at the current completed baseline. Earlier baselines are kept for later progress comparisons. Starting a new baseline deletes any unfinished one, with its recordings and audio. A baseline also creates a `session` row with its duration.
+- **Feeding Stage 3 (supersedes D17's provisional-baseline storage).** `user.baseline_id` now always names a `baseline` row.
+  - `feedbackBaselineFrom()` turns the stored summary into the feedback engine's `Baseline`:
+    - speaking median and p10/p90;
+    - the glide's p10 and p90 as `comfortableP10St`/`comfortableP90St` (the p90 is the safety ceiling the zones and strain monitor use);
+    - F2 by vowel code for vowels measured with confidence ≥ 0.5;
+    - the resonance score.
+  - The practice screen reads the captured baseline this way.
+  - *Use this session as my starting point* now saves its provisional baseline as a completed `baseline` row. Migration `0002` moves an existing `baseline.provisional` recording there too.
+  - Home treats a provisional baseline as a stand-in and still offers the full recording.
+- **The weight baseline is stored but not yet passed to live practice.** `StartOptions.weightBaseline` would turn on weight-index readouts, which D17 left unshown. That is a separate Stage 3 view change.
+- **Tests.** `app/src/baseline/plan.test.ts` covers:
+  - the task list against the handbook;
+  - every check;
+  - the summary: range from p5/p95 and ceiling from p90, the speaking-pitch fallback, ceiling and ΔF medians, resonance tokens and weights, the reduced-accuracy flag.
+  - The core test for `PitchStats` checks p5/p95 against the reported range.
+- **Not tested on a phone yet.** The Swift side can't be compiled in the Linux dev container; the iOS workflow builds it.
+- **Pending decisions:**
+  - A longer reading passage: "Heat From Fire" or the Rainbow Passage need a licence check before they ship.
+  - Whether to resume an interrupted baseline rather than start it again.
+  - Whether the summary should ever show the resonance score, for example after the user opts into gendered bands (Stage 3).
+  - The 4 ST and 0.1% thresholds, against real baselines.
+  - Android, which needs its own native capture and analysis module (D12).

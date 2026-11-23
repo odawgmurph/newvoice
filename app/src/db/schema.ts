@@ -1,7 +1,8 @@
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 // Tables follow the handbook's data-model sketch (§4.5): User, Session,
-// Recording, SkillState, Journal. Change this file, then run
+// Recording, SkillState, Journal, plus Baseline (the recording set
+// `User.baseline_id` points at). Change this file, then run
 // `npm run db:generate` and commit the new migration in drizzle/.
 
 const createdAt = () =>
@@ -42,8 +43,24 @@ export const user = sqliteTable('user', {
   genderedBands: integer('gendered_bands', { mode: 'boolean' }).notNull().default(false),
   safetyPrimerAckAt: integer('safety_primer_ack_at', { mode: 'timestamp_ms' }),
   onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
-  /** The baseline recording set (Stage 4 baseline capture). */
+  /** The current baseline (a completed row of `baseline`); null until one is recorded. */
   baselineId: integer('baseline_id'),
+});
+
+/**
+ * One baseline recording set (D20). Earlier baselines are kept so progress
+ * can be compared later; `user.baseline_id` names the current one.
+ */
+export const baseline = sqliteTable('baseline', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  createdAt: createdAt(),
+  /** Null while in progress; set when every task has a usable recording. */
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  sessionId: integer('session_id').references(() => session.id, { onDelete: 'set null' }),
+  /** `BaselineSummary` from src/baseline/plan.ts; null while in progress. */
+  summary: text('summary', { mode: 'json' }),
+  /** Version of the analysis core that measured it. */
+  analysisVersion: text('analysis_version'),
 });
 
 export const session = sqliteTable('session', {
@@ -60,6 +77,8 @@ export const recording = sqliteTable('recording', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   createdAt: createdAt(),
   sessionId: integer('session_id').references(() => session.id, { onDelete: 'set null' }),
+  /** Set for baseline recordings. */
+  baselineId: integer('baseline_id').references(() => baseline.id, { onDelete: 'cascade' }),
   /** Exercise or baseline task, e.g. "baseline.vowel.a". */
   taskId: text('task_id').notNull(),
   /** Local audio file; null when metrics-only mode kept no audio. */
@@ -86,3 +105,4 @@ export const journal = sqliteTable('journal', {
 });
 
 export type User = typeof user.$inferSelect;
+export type Baseline = typeof baseline.$inferSelect;

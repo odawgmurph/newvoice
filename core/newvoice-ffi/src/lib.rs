@@ -240,10 +240,29 @@ pub struct PitchSummary {
     pub voiced_s: f64,
     pub median_hz: f64,
     pub median_st: f64,
+    /// 5th and 95th percentiles: on a glide, the comfortable range (handbook E2).
+    pub p5_st: f64,
     pub p10_st: f64,
     pub p90_st: f64,
+    pub p95_st: f64,
     pub sd_st: f64,
     pub range_5_95_st: f64,
+}
+
+impl From<&core::units::PitchStats> for PitchSummary {
+    fn from(s: &core::units::PitchStats) -> Self {
+        Self {
+            voiced_s: s.voiced_s,
+            median_hz: s.median_hz,
+            median_st: s.median_st,
+            p5_st: s.p5_st,
+            p10_st: s.p10_st,
+            p90_st: s.p90_st,
+            p95_st: s.p95_st,
+            sd_st: s.sd_st,
+            range_5_95_st: s.range_5_95_st,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -268,15 +287,7 @@ pub fn analyse_recording(
         core_version: core::VERSION.to_owned(),
         duration_s: a.duration_s,
         frames: a.frames.iter().map(FrameResult::from).collect(),
-        pitch: a.pitch_stats().map(|s| PitchSummary {
-            voiced_s: s.voiced_s,
-            median_hz: s.median_hz,
-            median_st: s.median_st,
-            p10_st: s.p10_st,
-            p90_st: s.p90_st,
-            sd_st: s.sd_st,
-            range_5_95_st: s.range_5_95_st,
-        }),
+        pitch: a.pitch_stats().as_ref().map(PitchSummary::from),
     })
 }
 
@@ -580,15 +591,7 @@ impl From<&core::UtteranceSummary> for UtteranceSummary {
             end_s: u.end_s,
             voiced_s: u.voiced_s,
             scored: u.scored,
-            pitch: u.pitch.as_ref().map(|s| PitchSummary {
-                voiced_s: s.voiced_s,
-                median_hz: s.median_hz,
-                median_st: s.median_st,
-                p10_st: s.p10_st,
-                p90_st: s.p90_st,
-                sd_st: s.sd_st,
-                range_5_95_st: s.range_5_95_st,
-            }),
+            pitch: u.pitch.as_ref().map(PitchSummary::from),
             terminal_slope_st_per_s: u.terminal_slope_st_per_s,
             f1_hz: u.formants_hz[0],
             f2_hz: u.formants_hz[1],
