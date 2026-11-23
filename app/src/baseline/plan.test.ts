@@ -6,6 +6,8 @@ import {
   BASELINE_TASKS,
   buildSummary,
   checkTask,
+  feedbackBaselineFrom,
+  isBaselineSummary,
   isUsable,
   median,
   missingTasks,
@@ -13,6 +15,7 @@ import {
   READING_SENTENCES,
   resonanceTokens,
   stToHz,
+  toFeedbackBaseline,
   type BaselineResults,
   type BaselineTask,
 } from './plan.ts';
@@ -280,4 +283,46 @@ test('helpers', () => {
   assert.equal(noteName(69), 'A4');
   assert.equal(noteName(hzToSt(130.8)), 'C3');
   assert.equal(noteName(hzToSt(220)), 'A3');
+});
+
+test('the feedback engine gets the glide’s p10/p90 as the comfortable range, p90 being the safety ceiling', () => {
+  const summary = buildSummary(fullResults(), { version: 1, score: 0.2, f1: 0, f2: 0.2, f3: 0.3, tokensUsed: 3 });
+  const st = hzToSt(150);
+  const b = toFeedbackBaseline(summary);
+  assert.ok(b);
+  assert.equal(b.source, 'baseline');
+  assert.ok(Math.abs(b.comfortableP10St - (st - 6)) < 1e-9);
+  assert.ok(Math.abs(b.comfortableP90St - (st + 10)) < 1e-9);
+  assert.ok(Math.abs(b.medianSt - hzToSt(130)) < 1e-9);
+  assert.equal(b.resonance, 0.2);
+  // F2 by Hillenbrand code, all three vowels at confidence ≥ 0.5.
+  assert.deepEqual(b.vowelF2Hz, { ah: 1333, iy: 2322, uw: 997 });
+});
+
+test('low-confidence vowels give the feedback engine no F2', () => {
+  const r = fullResults();
+  r['vowel-u'] = vowel(378, 997, 2343, 0.3);
+  const b = toFeedbackBaseline(buildSummary(r, null));
+  assert.deepEqual(Object.keys(b!.vowelF2Hz).sort(), ['ah', 'iy']);
+  assert.equal(b!.resonance, null);
+});
+
+test('stored summaries: captured and provisional baselines are both read', () => {
+  const summary = JSON.parse(JSON.stringify(buildSummary(fullResults(), null)));
+  assert.ok(isBaselineSummary(summary));
+  assert.equal(feedbackBaselineFrom(summary)?.source, 'baseline');
+  const provisional = {
+    medianSt: 50,
+    p10St: 47,
+    p90St: 53,
+    comfortableP10St: 47,
+    comfortableP90St: 53,
+    vowelF2Hz: {},
+    resonance: null,
+    source: 'provisional',
+  };
+  assert.ok(!isBaselineSummary(provisional));
+  assert.equal(feedbackBaselineFrom(provisional)?.source, 'provisional');
+  assert.equal(feedbackBaselineFrom(null), null);
+  assert.equal(feedbackBaselineFrom({ version: 1 }), null);
 });

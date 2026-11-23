@@ -35,6 +35,12 @@ export const user = sqliteTable('user', {
   playbackEnabled: integer('playback_enabled', { mode: 'boolean' }).notNull().default(false),
   /** Metrics-only: keep the numbers, never keep the audio. */
   metricsOnly: integer('metrics_only', { mode: 'boolean' }).notNull().default(true),
+  /**
+   * Opt-in: name the two reference groups and draw their bands on the
+   * feedback views. Off by default; labels stay neutral without it
+   * (handbook §3.6, §4.3; decision D2).
+   */
+  genderedBands: integer('gendered_bands', { mode: 'boolean' }).notNull().default(false),
   safetyPrimerAckAt: integer('safety_primer_ack_at', { mode: 'timestamp_ms' }),
   onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
   /** The current baseline (a completed row of `baseline`); null until one is recorded. */
@@ -42,7 +48,7 @@ export const user = sqliteTable('user', {
 });
 
 /**
- * One baseline recording set (D17). Earlier baselines are kept so progress
+ * One baseline recording set (D20). Earlier baselines are kept so progress
  * can be compared later; `user.baseline_id` names the current one.
  */
 export const baseline = sqliteTable('baseline', {

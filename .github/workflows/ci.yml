@@ -119,6 +119,10 @@ jobs:
         run: uv run python -m norms.build_norms --check
       - name: LibriSpeech subset is intact
         run: uv run python -m corpus.build_librispeech --check
+      # Synthetic sessions only; the LibriSpeech sessions need the 338 MB
+      # dev-clean tarball and are regenerated locally (validation/strain.py).
+      - name: Strain-monitor fixture is up to date
+        run: uv run python -m validation.strain --check
 
   app:
     name: App (typecheck, tests)

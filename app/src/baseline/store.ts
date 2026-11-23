@@ -4,6 +4,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import type { TaskResult } from '../../modules/newvoice-audio/src/NewVoiceAudio.types';
 import type { Db } from '../db/client';
 import { baseline, recording, session, user, type Baseline } from '../db/schema';
+import type { Baseline as FeedbackBaseline } from '../feedback/types';
 import type { BaselineSummary, BaselineTask } from './plan';
 
 // Baseline rows, their recordings and kept audio. Audio, when the user keeps
@@ -93,3 +94,21 @@ export async function currentBaseline(db: Db, baselineId: number | null | undefi
   return row ?? null;
 }
 
+
+/**
+ * Stores a Stage 3 provisional baseline (from a practice session) as the
+ * current one, until a full baseline is recorded.
+ */
+export async function saveProvisionalBaseline(
+  db: Db,
+  provisional: FeedbackBaseline,
+  analysisVersion: string,
+): Promise<number> {
+  const now = new Date();
+  const [b] = await db
+    .insert(baseline)
+    .values({ completedAt: now, summary: provisional, analysisVersion })
+    .returning({ id: baseline.id });
+  await db.update(user).set({ baselineId: b.id }).where(eq(user.id, 1));
+  return b.id;
+}

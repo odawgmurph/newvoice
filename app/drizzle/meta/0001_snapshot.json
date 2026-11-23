@@ -1,75 +1,9 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e7a70b37-2b7c-4b90-b392-edb1fbd8e9e3",
+  "id": "b797148a-8490-400d-8b93-7449bac6b17d",
   "prevId": "29a94b30-0922-48fd-b9e6-1bc8ee5fe27e",
   "tables": {
-    "baseline": {
-      "name": "baseline",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "analysis_version": {
-          "name": "analysis_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "baseline_session_id_session_id_fk": {
-          "name": "baseline_session_id_session_id_fk",
-          "tableFrom": "baseline",
-          "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "journal": {
       "name": "journal",
       "columns": {
@@ -132,13 +66,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "baseline_id": {
-          "name": "baseline_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "task_id": {
           "name": "task_id",
           "type": "text",
@@ -188,19 +115,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "recording_baseline_id_baseline_id_fk": {
-          "name": "recording_baseline_id_baseline_id_fk",
-          "tableFrom": "recording",
-          "tableTo": "baseline",
-          "columnsFrom": [
-            "baseline_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -375,6 +289,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": true
+        },
+        "gendered_bands": {
+          "name": "gendered_bands",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "safety_primer_ack_at": {
           "name": "safety_primer_ack_at",

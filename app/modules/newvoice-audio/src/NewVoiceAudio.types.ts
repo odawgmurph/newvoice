@@ -14,6 +14,66 @@ export type Frame = {
   f2Hz: number | null;
   /** 0-1: roughly the chance F1 and F2 are both within 10%. */
   formantConfidence: number;
+  /** H1*–H2* (dB), frames with an F0 and F1/F2 only. Higher = lighter/breathier. */
+  h1cH2cDb: number | null;
+  /** Alpha ratio (dB), frames with an F0 only. */
+  alphaRatioDb: number | null;
+  /** Resonance score of this frame against `StartOptions.vowel` (0/1 = the two reference groups); gate on formantConfidence. */
+  resonance: number | null;
+  /** Live weight index against `StartOptions.weightBaseline` (positive = heavier). A proxy only. */
+  weightIndex: number | null;
+};
+
+/** Utterance pitch statistics over voiced frames, in semitones (MIDI scale). */
+export type PitchSummary = {
+  medianHz: number;
+  medianSt: number;
+  p10St: number;
+  p90St: number;
+  sdSt: number;
+  range5to95St: number;
+};
+
+/**
+ * One utterance, measured by the Rust core when it ends (an unvoiced gap of
+ * 300 ms, or 12 s of speech). Same shape as `newvoice-cli utterances` output
+ * after camel-casing (harness/validation/strain.py).
+ */
+export type UtteranceSummary = {
+  /** Stream times (s) of the first and last voiced frames. */
+  startS: number;
+  endS: number;
+  voicedS: number;
+  /** At least 1 s voiced: utterance scores may be shown (handbook §3.1). */
+  scored: boolean;
+  pitch: PitchSummary | null;
+  /** F0 slope over the last 300 ms of voicing (ST/s); > +2 is a rising contour. */
+  terminalSlopeStPerS: number | null;
+  f1Hz: number | null;
+  f2Hz: number | null;
+  f3Hz: number | null;
+  formantConfidence: number;
+  /** Against `StartOptions.vowel`, when set. */
+  resonance: number | null;
+  /** Against `StartOptions.weightBaseline`, when set. */
+  weightIndex: number | null;
+  h1cH2cDb: number | null;
+  alphaRatioDb: number | null;
+  cppsDb: number | null;
+  hnrDb: number | null;
+  /** Fractions (0.01 = 1%). */
+  jitterLocal: number | null;
+  shimmerLocal: number | null;
+  periods: number;
+};
+
+export type FeatureStats = { mean: number; sd: number };
+
+/** A user's weight-index baseline, from `measure_voice_quality` on the baseline recording. */
+export type WeightBaseline = {
+  h1cH2cDb: FeatureStats | null;
+  alphaRatioDb: FeatureStats | null;
+  cppsDb: FeatureStats | null;
 };
 
 export type FramesEvent = {
@@ -55,6 +115,10 @@ export type CaptureInfo = {
 
 export type StartOptions = {
   formantCeilingHz?: number;
+  /** Hillenbrand code ("iy") or IPA ("i") of the vowel the exercise asks for; enables resonance scores. */
+  vowel?: string;
+  /** Enables weight-index readouts. */
+  weightBaseline?: WeightBaseline;
   /** Record a test clip this long for the diagnostics export; capture stops by itself at the end. */
   recordSeconds?: number;
 };
@@ -85,6 +149,8 @@ export type ExportResult = {
 export type NewVoiceAudioModuleEvents = {
   onFrames: (event: FramesEvent) => void;
   onCaptureInfo: (info: CaptureInfo) => void;
+  /** Each finished utterance's summary (computed off the analysis thread). */
+  onUtterance: (utterance: UtteranceSummary) => void;
 };
 
 /** How a recorded task is measured (see TaskAnalysis.swift). */
@@ -112,8 +178,6 @@ export type TaskPitch = {
   sdSt: number;
 };
 
-export type FeatureStats = { mean: number; sd: number };
-
 /** Voice quality (handbook §3.4); only comparable within one qualityVersion. */
 export type TaskQuality = {
   qualityVersion: number;
@@ -131,11 +195,7 @@ export type TaskQuality = {
   shimmerLocal: number | null;
   periods: number;
   /** This recording as a weight-index baseline. */
-  weightBaseline: {
-    h1cH2cDb: FeatureStats | null;
-    alphaRatioDb: FeatureStats | null;
-    cppsDb: FeatureStats | null;
-  };
+  weightBaseline: WeightBaseline;
 };
 
 /** A sustained vowel's steady-state formants and vocal tract length. */

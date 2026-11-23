@@ -100,6 +100,24 @@ export default function Settings() {
         />
       </Card>
 
+      <Heading>Feedback labels</Heading>
+      <Card>
+        <Body muted>
+          NewVoice describes your voice as higher or lower, brighter or darker, lighter or heavier, compared with
+          your own starting point. It never puts your voice in a category.
+        </Body>
+        <Toggle
+          label="Show reference groups on charts"
+          value={user?.genderedBands ?? false}
+          onChange={(on) => void update({ genderedBands: on })}
+        />
+        <Body muted>
+          Off by default. When on, the charts name their two reference areas after the groups the reference
+          recordings came from (adult speakers of American English, recorded in 1995) and show those groups’ typical
+          ranges. They describe averages of other people, not a goal or a verdict on your voice.
+        </Body>
+      </Card>
+
       <Heading>Quick exit</Heading>
       <Card>
         <Body muted>

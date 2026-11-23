@@ -174,7 +174,7 @@ Evidence for each choice is in [`validation/stage1-real.md`](validation/stage1-r
   - **Onboarding follows the Onboarding board:** back · step dots · Exit header, display heading, radio cards with hints, action pinned to the bottom. Home keeps a placeholder until lessons exist; the board's path, today card and tab bar come with Stages 5–6. The capture spike keeps its own dark look.
   - **"stop" is used for errors and the delete-all button.** The design reserves it for hard stops; a destructive, irreversible action is the closest app-shell equivalent. Revisit if the design adds a separate destructive token.
 - **Unit tests** for pure app logic run under Node's built-in test runner (`npm test`), so no test framework is needed yet; CI runs them.
-- **Still to do in Stage 4:** ~~baseline capture~~ (done, D17), a discreet app name and icon (needs alternate-icon support and the real bundle ID), quiet/whisper mode settings, a quick-exit gesture in addition to the button, and the privacy policy draft. **Pending decision:** whether quick exit should also show a neutral decoy screen instead of black.
+- **Still to do in Stage 4:** ~~baseline capture~~ (done, D20), a discreet app name and icon (needs alternate-icon support and the real bundle ID), quiet/whisper mode settings, a quick-exit gesture in addition to the button, and the privacy policy draft. **Pending decision:** whether quick exit should also show a neutral decoy screen instead of black.
 
 ## D16 · Live look-ahead is 4 frames (settles D13's pending decision)
 
@@ -188,7 +188,64 @@ Evidence: [`validation/live-lookahead.md`](validation/live-lookahead.md), genera
 - **Tests.** `default_lookahead_never_draws_a_rejected_octave_jump` (core) streams a 45 ms octave burst: batch and the default live track drop it, 2 frames draws it. `harness/tests/test_lookahead.py` gates the default on clean LibriSpeech: no extra F0 frames, at most 0.2% differing.
 - **To confirm on the phone:** the next diagnostics clip should show mic→screen p95 under 100 ms. The p95 estimate is about 98 ms, so there is little margin; if it misses, the next lever is the I/O buffer or the analysis window, not the jump guard.
 
-## D17 · Baseline capture (Stage 4, second iteration)
+## D17 · Feedback engine: numbers in Rust, decisions in TypeScript (Stage 3)
+
+- **Utterances are the unit of scoring.** `newvoice-core::utterance` cuts the live frame stream into utterances: a 300 ms unvoiced gap ends one, and 12 s of speech forces a split. It keeps each utterance's audio and measures it with the same batch code that scores recordings: pitch statistics, the F0 slope over the last 300 ms (rising above +2 ST/s, handbook §3.5), median F1–F3 over frames with confidence ≥ 0.5, CPPS, HNR, jitter, shimmer, H1*–H2* and alpha. It also adds the resonance score and weight index when the exercise's vowel and the user's weight baseline are known. Utterance scores are shown only when at least 1 s is voiced (handbook §3.1). `UTTERANCE_VERSION` 1.
+- **On the phone**, `LiveAnalyser` runs the segmenter beside the stream analyser. `pull_utterances()` measures finished utterances outside the analyser's lock, and the iOS module calls it on a utility-priority queue about every 250 ms and on stop, then sends each summary as an `onUtterance` event. A 3 s utterance costs about 0.35 s at 48 kHz on x86, off the live thread. The analyser holds at most 8 unmeasured utterances. `set_feedback_context(vowel, weight_baseline)` also adds per-frame `resonance` and `weight_index`. `newvoice-cli utterances` reproduces the phone's summaries from a WAV.
+- **Decisions and presentation are pure TypeScript** in `app/src/feedback/`, with no React Native imports, so `npm test` runs them under Node. Siblings import each other with `.ts` paths (`allowImportingTsExtensions`). The Release `.ipa` build (iOS build run 18) bundles them, so Metro accepts these paths.
+- **Zones** (`zones.ts`):
+  - Targets step from the baseline by +1 ST or +3% F2 per mastered level (§3.9).
+  - The pitch zone is ±2 ST around its centre, since §2.6 calls an F0 SD under ~2 ST monotone. The F2 zone is ±3%.
+  - Goal ceilings:
+    - *feminine / flexible:* 200 Hz (Sumian's training pitch, §1.2) and the higher reference group's F2 mean;
+    - *androgynous:* ~159 Hz, the geometric centre of the 145–175 Hz ambiguous zone, and the geometric midpoint of the reference F2s;
+    - *own:* baseline steps only.
+  - **The zone never reaches above the comfortable p90.** F0 above it is classed `above-comfortable`, drawn in the caution colour and never rewarded (§2.4, §3.9). Zones never pull a voice below its baseline.
+  - In-zone success is 70% of voiced frames (E14).
+  - Until Stage 5 skill state exists, the practice screen has a manual target-step stepper.
+- **Readouts** (`readout.ts`) use rolling medians. Formant readouts hide below 0.5 confidence and are dimmed from 0.5 to 0.7.
+- **Feedback fading** (`fading.ts`): each view runs as *live*, *summary* (no trace, a card per utterance) or *delayed* (each utterance's trace is replayed after it ends) (§2.5).
+- **Views** (`app/src/feedback/views/`, Skia):
+  - pitch trace with the target band and a dashed comfortable-p90 line;
+  - pitch × resonance map;
+  - F1×F2 vowel chart with 1- and 2-SD reference ellipses from `referenceNorms.ts`, which `harness/norms/build_norms.py` now generates and `--check` covers;
+  - summary card (knowledge of results plus a "why" line);
+  - rest prompt with a 0–10 effort self-report.
+- **Practice screen** (`/practice`, linked from home): optional vowel, mode switch, the views, and the strain monitor. Without a stored baseline it offers *Use this session as my starting point*, a **provisional baseline**. It needs 10 s of scored speech, takes the speaking p10/p90 as a conservative comfortable range until Stage 4's glide, and is stored as a `baseline.provisional` recording and `user.baselineId`.
+- **The weight index is not shown yet.** The `Baseline` has no weight baseline until Stage 4's baseline capture stores `measure_voice_quality`'s `weight_baseline`, so `weightIndex` stays null in practice.
+- **Deferred: the LPC "wave" view.** The plan lists it as optional. It would need the per-frame spectral envelope sent across the bridge at 100 frames/s, and the F2 readout and vowel chart already give the TruVox-style resonance feedback. Revisit with the Stage 5 resonance lessons.
+
+## D18 · Strain monitor rules and their evidence (Stage 3)
+
+Evidence: [`validation/stage3-strain.md`](validation/stage3-strain.md), generated by `harness/validation/strain.py --report`.
+
+- **Rules** (`app/src/feedback/strain.ts`, `STRAIN_RULES`). Any one asks for a rest (handbook §2.4):
+  - jitter rising ×2.0 and by ≥ 0.5 points;
+  - shimmer rising ×1.8 and by ≥ 3 points;
+  - CPPS falling ≥ 5 dB;
+  - a scored utterance's median F0 above the comfortable p90 (immediately);
+  - effort ≥ 6/10.
+- **How trends are compared:** the median of the last 3 scored utterances against the first 3 of the session (or since the last rest), once 6 are in. Each acoustic sign is raised once per rest period. While the prompt shows, the microphone stops. Acknowledging the rest resets the trend reference.
+- **Calibration.** Thresholds sit above the largest change any healthy session showed, and below what deliberately strained sessions reach.
+  - Healthy maxima: jitter ×1.82, shimmer ×1.54, CPPS −3.68 dB. These come from 40 LibriSpeech dev-clean speakers (their first 10 read utterances, 626 scored utterances) and 4 healthy synthetic sessions (steady, alternating loudness, a 1.5 ST rise inside the comfortable range).
+  - Result: **all 8 deliberately strained sessions get a rest prompt** (jitter, shimmer, aspiration noise, combined, F0 above p90; at utterance 5–10, always after the onset), and **none of the 44 healthy ones do**.
+- **Limits.**
+  - The strained voices are synthetic (per-cycle jitter and shimmer, aspiration noise). No recordings of strained trans voices exist to test on, and asking anyone to strain on purpose would contradict the safety rules.
+  - Trend rules need six scored utterances, so the opening minute of a session is covered by the F0 and effort rules only.
+  - The jitter and shimmer margins over healthy read speech are small (about 10% and 17%). Practice on fixed material should vary less than read speech, but revisit with real practice data.
+- **CI** regenerates the synthetic sessions and fails if the fixture is stale (`validation.strain --check`). The LibriSpeech sessions need the 338 MB tarball, so they are regenerated locally (`--real`); only derived numbers are committed (LibriSpeech is CC BY 4.0, credited in `NOTICE`).
+
+## D19 · Stage 3 exit without advisors; gendered bands are opt-in (applies D2)
+
+- **No gendered labels without opt-in, enforced by a test.** `user.genderedBands` defaults to false (migration `0001`) and is changed only in Settings → *Feedback labels*. Labels are higher/lower, brighter/darker, lighter/heavier and rising/falling. `labels.test.ts` scans every source file in `app/src/feedback/` and `practice.tsx`, with comments removed, and fails on any gendered word. Three exemptions are allowed:
+  - the marked opt-in table in `labels.ts`;
+  - the audit's own term list;
+  - the goal value on lines marked `// audit: goal key`.
+- **Opt-in naming.** When opted in, the reference areas name the Hillenbrand adult groups. On the map they are each group's speaker-median F0 ±1 SD by ±0.25 on the resonance scale, a visual marker rather than data. The generated norms key the groups `low`/`high`, so the data carries no gendered words.
+- **Copy.** A test keeps the rest-prompt copy education-only: no therapy, treatment or diagnosis (D3).
+- **The advisor review is replaced by the owner's review.** With no advisors (D2), the build plan's "advisors and co-design group review the views" becomes the owner reviewing the views on their iPhone, against the handbook's dysphoria-sensitive defaults (§2.7, §4.3). The Stage 3 Swift compiles and the `.ipa` builds (iOS build run 18). **Done (Nov 22):** the owner reviewed the views on their iPhone with that build and approved them, with no changes. D16's latency confirmation still waits on the next diagnostics clip (Stage 2). The other two exit criteria are met in CI.
+
+## D20 · Baseline capture (Stage 4, second iteration)
 
 The handbook's baseline (§4.3; Unit 0 in §4.1): sustained /a/ /i/ /u/, a glide, a reading passage and 30 s of spontaneous speech. Onboarding now hands over to it, it can be put off ("Not now"), and Home offers it until one is stored, then offers to record it again.
 
@@ -210,7 +267,17 @@ The handbook's baseline (§4.3; Unit 0 in §4.1): sustained /a/ /i/ /u/, a glide
 - **No live pitch while recording,** only a level meter and a countdown. The baseline should capture the everyday voice, not one steered by a readout.
 - **Results use neutral words** (D2). The summary shows speaking pitch (Hz and nearest note), the comfortable range and where its ceiling sits, and per-vowel formants. The resonance score is stored but not shown as a number, so a 0–1 position between two reference groups isn't read as a gender score. There's no pass/fail.
 - **Reading text: six CAPE-V sentences** (handbook E16). They are short, freely used for voice assessment, and each stresses different sounds.
-- **Storage.** A new `baseline` table (migration `0001_baseline`): `completed_at`, `summary` JSON, `session_id` and `analysis_version`. `recording.baseline_id` ties each task recording to its baseline and is deleted with it. `user.baseline_id` points at the current completed baseline. Earlier baselines are kept for later progress comparisons. Starting a new baseline deletes any unfinished one, with its recordings and audio. A baseline also creates a `session` row with its duration.
+- **Storage.** A new `baseline` table (migration `0002_baseline`): `completed_at`, `summary` JSON, `session_id` and `analysis_version`. `recording.baseline_id` ties each task recording to its baseline and is deleted with it. `user.baseline_id` points at the current completed baseline. Earlier baselines are kept for later progress comparisons. Starting a new baseline deletes any unfinished one, with its recordings and audio. A baseline also creates a `session` row with its duration.
+- **Feeding Stage 3 (supersedes D17's provisional-baseline storage).** `user.baseline_id` now always names a `baseline` row.
+  - `feedbackBaselineFrom()` turns the stored summary into the feedback engine's `Baseline`:
+    - speaking median and p10/p90;
+    - the glide's p10 and p90 as `comfortableP10St`/`comfortableP90St` (the p90 is the safety ceiling the zones and strain monitor use);
+    - F2 by vowel code for vowels measured with confidence ≥ 0.5;
+    - the resonance score.
+  - The practice screen reads the captured baseline this way.
+  - *Use this session as my starting point* now saves its provisional baseline as a completed `baseline` row. Migration `0002` moves an existing `baseline.provisional` recording there too.
+  - Home treats a provisional baseline as a stand-in and still offers the full recording.
+- **The weight baseline is stored but not yet passed to live practice.** `StartOptions.weightBaseline` would turn on weight-index readouts, which D17 left unshown. That is a separate Stage 3 view change.
 - **Tests.** `app/src/baseline/plan.test.ts` covers:
   - the task list against the handbook;
   - every check;

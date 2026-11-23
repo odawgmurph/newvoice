@@ -4,8 +4,10 @@
 //
 // Pure logic only (task list, quality checks, the stored summary), so
 // `npm test` can run it under Node. Thresholds and their sources are listed
-// in docs/decisions.md (D17).
+// in docs/decisions.md (D20).
 
+import type { Baseline } from '../feedback/types.ts';
+import { parseBaseline } from '../feedback/zones.ts';
 import type {
   ResonanceScoreResult,
   ResonanceTokenInput,
@@ -43,7 +45,7 @@ export type BaselineTask = {
 /**
  * Six CAPE-V sentences (handbook E16): short, freely used for voice
  * assessment, and each stresses different sounds (vowels, voiced-only,
- * nasals, glottal onsets). Longer passages need a licence check (D17).
+ * nasals, glottal onsets). Longer passages need a licence check (D20).
  */
 export const READING_SENTENCES = [
   'The blue spot is on the key again.',
@@ -218,10 +220,11 @@ export type BaselineSummary = {
   reading: PitchBlock | null;
   /**
    * Comfortable range from the glide: 5th–95th percentile (handbook E2).
+   * `p10St` is the floor Stage 3's views draw (they pair p10 with p90).
    * `ceilingSt` is the 90th percentile, above which nothing is rewarded and
    * strain checks apply (handbook §2.4, §3.9).
    */
-  comfortableRange: { lowSt: number; highSt: number; ceilingSt: number; spanSt: number } | null;
+  comfortableRange: { lowSt: number; highSt: number; p10St: number; ceilingSt: number; spanSt: number } | null;
   vowels: { a: VowelBlock | null; i: VowelBlock | null; u: VowelBlock | null };
   /** Median of the vowels' chosen ceilings: the live formant ceiling to use. */
   formantCeilingHz: number | null;
@@ -316,7 +319,13 @@ export function buildSummary(results: BaselineResults, resonance: ResonanceScore
     speaking: spont ? { ...spont, source: 'spontaneous' } : reading ? { ...reading, source: 'reading' } : null,
     reading,
     comfortableRange: glide
-      ? { lowSt: glide.p5St, highSt: glide.p95St, ceilingSt: glide.p90St, spanSt: glide.p95St - glide.p5St }
+      ? {
+          lowSt: glide.p5St,
+          highSt: glide.p95St,
+          p10St: glide.p10St,
+          ceilingSt: glide.p90St,
+          spanSt: glide.p95St - glide.p5St,
+        }
       : null,
     vowels: {
       a: vowelBlock(results['vowel-a']),
@@ -342,6 +351,50 @@ export function buildSummary(results: BaselineResults, resonance: ResonanceScore
 /** Required tasks before a baseline counts as stored (Unit 0 unlock: "Baseline stored"). */
 export function missingTasks(results: BaselineResults): BaselineTaskId[] {
   return BASELINE_TASKS.filter((t) => results[t.id] == null).map((t) => t.id);
+}
+
+// ——— Handing the baseline to the feedback engine (Stage 3) ———
+
+/** Whether stored JSON is a captured baseline's summary (rather than a Stage 3 provisional one). */
+export function isBaselineSummary(value: unknown): value is BaselineSummary {
+  if (typeof value !== 'object' || value == null) return false;
+  const v = value as Record<string, unknown>;
+  return v.version === BASELINE_VERSION && typeof v.vowels === 'object' && v.vowels != null;
+}
+
+/**
+ * The feedback engine's view of a captured baseline: speaking pitch, the
+ * glide's p10/p90 as the comfortable range (p90 is the safety ceiling),
+ * F2 for each vowel measured with confidence ≥ 0.5 (as Stage 3's
+ * provisional baseline gates it), and the resonance score.
+ */
+export function toFeedbackBaseline(s: BaselineSummary): Baseline | null {
+  if (!s.speaking || !s.comfortableRange) return null;
+  const vowelF2Hz: Partial<Record<string, number>> = {};
+  for (const [id, key] of [
+    ['vowel-a', 'a'],
+    ['vowel-i', 'i'],
+    ['vowel-u', 'u'],
+  ] as const) {
+    const v = s.vowels[key];
+    const code = BASELINE_TASKS.find((t) => t.id === id)!.vowel!.code;
+    if (v?.f2Hz != null && v.confidence >= MIN_VOWEL_CONFIDENCE) vowelF2Hz[code] = v.f2Hz;
+  }
+  return {
+    medianSt: s.speaking.medianSt,
+    p10St: s.speaking.p10St,
+    p90St: s.speaking.p90St,
+    comfortableP10St: s.comfortableRange.p10St,
+    comfortableP90St: s.comfortableRange.ceilingSt,
+    vowelF2Hz,
+    resonance: s.resonance?.score ?? null,
+    source: 'baseline',
+  };
+}
+
+/** Reads `baseline.summary` for the feedback engine: a captured summary, or a provisional baseline. */
+export function feedbackBaselineFrom(summary: unknown): Baseline | null {
+  return isBaselineSummary(summary) ? toFeedbackBaseline(summary) : parseBaseline(summary);
 }
 
 // ——— Display helpers ———

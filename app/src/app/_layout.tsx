@@ -59,6 +59,7 @@ function Gate() {
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       {/* No swipe-back mid-recording; the header's back button still works. */}
       <Stack.Screen name="baseline" options={{ title: 'Starting point', gestureEnabled: false }} />
+      <Stack.Screen name="practice" options={{ title: 'Practice feedback' }} />
       <Stack.Screen
         name="capture"
         options={{

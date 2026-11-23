@@ -6,6 +6,7 @@
 //! audio. Finished recordings go through [`analyse_recording`] and
 //! [`measure_sustained_vowel`].
 
+use std::collections::VecDeque;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -13,6 +14,7 @@ use newvoice_core as core;
 use newvoice_core::formant::FormantConfig;
 use newvoice_core::quality::{self as vq, QualityConfig};
 use newvoice_core::units::hz_to_st;
+use newvoice_core::utterance::{UtteranceAudio, UtteranceConfig, UtteranceContext};
 
 uniffi::setup_scaffolding!();
 
@@ -152,6 +154,12 @@ pub struct FrameResult {
     pub formant_confidence: f64,
     /// Spectral voice-quality measures, on frames with an F0 only.
     pub spectral: Option<FrameSpectral>,
+    /// Live only: this frame's resonance score against the vowel set with
+    /// `LiveAnalyser::set_feedback_context`. Gate it on `formant_confidence`.
+    pub resonance: Option<f64>,
+    /// Live only: this frame's weight index against the context baseline
+    /// (H1*–H2* and alpha ratio; frames have no CPPS). A proxy only.
+    pub weight_index: Option<f64>,
 }
 
 /// Per-frame spectral voice-quality measures (dB).
@@ -205,7 +213,24 @@ impl From<&core::Frame> for FrameResult {
                 .unwrap_or_default(),
             formant_confidence: f.formant_confidence,
             spectral: f.spectral.as_ref().map(FrameSpectral::from),
+            resonance: None,
+            weight_index: None,
         }
+    }
+}
+
+impl FrameResult {
+    /// A live frame with its context scores.
+    fn live(f: &core::Frame, ctx: &UtteranceContext) -> Self {
+        let mut out = Self::from(f);
+        out.resonance = ctx
+            .vowel
+            .and_then(|v| core::utterance::frame_resonance(f, v));
+        out.weight_index = ctx.weight_baseline.and_then(|b| {
+            f.spectral
+                .and_then(|s| vq::weight::weight_index(&s.weight_features(), &b))
+        });
+        out
     }
 }
 
@@ -222,6 +247,22 @@ pub struct PitchSummary {
     pub p95_st: f64,
     pub sd_st: f64,
     pub range_5_95_st: f64,
+}
+
+impl From<&core::units::PitchStats> for PitchSummary {
+    fn from(s: &core::units::PitchStats) -> Self {
+        Self {
+            voiced_s: s.voiced_s,
+            median_hz: s.median_hz,
+            median_st: s.median_st,
+            p5_st: s.p5_st,
+            p10_st: s.p10_st,
+            p90_st: s.p90_st,
+            p95_st: s.p95_st,
+            sd_st: s.sd_st,
+            range_5_95_st: s.range_5_95_st,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -246,17 +287,7 @@ pub fn analyse_recording(
         core_version: core::VERSION.to_owned(),
         duration_s: a.duration_s,
         frames: a.frames.iter().map(FrameResult::from).collect(),
-        pitch: a.pitch_stats().map(|s| PitchSummary {
-            voiced_s: s.voiced_s,
-            median_hz: s.median_hz,
-            median_st: s.median_st,
-            p5_st: s.p5_st,
-            p10_st: s.p10_st,
-            p90_st: s.p90_st,
-            p95_st: s.p95_st,
-            sd_st: s.sd_st,
-            range_5_95_st: s.range_5_95_st,
-        }),
+        pitch: a.pitch_stats().as_ref().map(PitchSummary::from),
     })
 }
 
@@ -419,6 +450,14 @@ fn stats_in(s: Option<FeatureStats>) -> Option<vq::weight::FeatureStats> {
     })
 }
 
+fn baseline_in(b: WeightBaseline) -> vq::weight::WeightBaseline {
+    vq::weight::WeightBaseline {
+        h1c_h2c_db: stats_in(b.h1c_h2c_db),
+        alpha_ratio_db: stats_in(b.alpha_ratio_db),
+        cpps_db: stats_in(b.cpps_db),
+    }
+}
+
 fn stats_out(s: Option<vq::weight::FeatureStats>) -> Option<FeatureStats> {
     s.map(|s| FeatureStats {
         mean: s.mean,
@@ -509,26 +548,129 @@ pub fn weight_index(features: WeightFeatures, baseline: WeightBaseline) -> Optio
             alpha_ratio_db: features.alpha_ratio_db,
             cpps_db: features.cpps_db,
         },
-        &vq::weight::WeightBaseline {
-            h1c_h2c_db: stats_in(baseline.h1c_h2c_db),
-            alpha_ratio_db: stats_in(baseline.alpha_ratio_db),
-            cpps_db: stats_in(baseline.cpps_db),
-        },
+        &baseline_in(baseline),
     )
+}
+
+/// One finished utterance's measures (handbook §3.1–3.5), computed with the
+/// same batch analysis as finished recordings.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct UtteranceSummary {
+    /// Stream times of the first and last voiced frames, seconds.
+    pub start_s: f64,
+    pub end_s: f64,
+    pub voiced_s: f64,
+    /// At least 1 s voiced: utterance scores may be shown.
+    pub scored: bool,
+    pub pitch: Option<PitchSummary>,
+    /// F0 slope over the last 300 ms of voicing, ST/s.
+    pub terminal_slope_st_per_s: Option<f64>,
+    pub f1_hz: Option<f64>,
+    pub f2_hz: Option<f64>,
+    pub f3_hz: Option<f64>,
+    pub formant_confidence: f64,
+    /// Against the context vowel, when set.
+    pub resonance: Option<f64>,
+    /// Against the context weight baseline, when set.
+    pub weight_index: Option<f64>,
+    pub h1c_h2c_db: Option<f64>,
+    pub alpha_ratio_db: Option<f64>,
+    pub cpps_db: Option<f64>,
+    pub hnr_db: Option<f64>,
+    /// Fractions (0.01 = 1%).
+    pub jitter_local: Option<f64>,
+    pub shimmer_local: Option<f64>,
+    pub periods: u32,
+}
+
+impl From<&core::UtteranceSummary> for UtteranceSummary {
+    fn from(u: &core::UtteranceSummary) -> Self {
+        let q = &u.quality;
+        Self {
+            start_s: u.start_s,
+            end_s: u.end_s,
+            voiced_s: u.voiced_s,
+            scored: u.scored,
+            pitch: u.pitch.as_ref().map(PitchSummary::from),
+            terminal_slope_st_per_s: u.terminal_slope_st_per_s,
+            f1_hz: u.formants_hz[0],
+            f2_hz: u.formants_hz[1],
+            f3_hz: u.formants_hz[2],
+            formant_confidence: u.formant_confidence,
+            resonance: u.resonance,
+            weight_index: u.weight_index,
+            h1c_h2c_db: q.h1c_h2c_db,
+            alpha_ratio_db: q.alpha_ratio_db,
+            cpps_db: q.cpps_db,
+            hnr_db: q.hnr_db,
+            jitter_local: q.jitter_local,
+            shimmer_local: q.shimmer_local,
+            periods: u32::try_from(q.periods).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+/// Finished utterances waiting for `pull_utterances`; older ones are dropped
+/// beyond this, so an app that never pulls doesn't grow without bound.
+const MAX_PENDING_UTTERANCES: usize = 8;
+
+#[derive(Debug)]
+struct Live {
+    stream: core::StreamAnalyser,
+    segmenter: core::UtteranceSegmenter,
+    context: UtteranceContext,
 }
 
 /// Live analysis: push microphone samples from the audio thread, pull frames
 /// for the UI. Safe to share between threads.
+///
+/// It also cuts the stream into utterances (an unvoiced gap of 300 ms ends
+/// one). `pull_utterances` measures the finished ones; call it from a
+/// lower-priority thread than `push`/`pull`, since it runs the batch
+/// analysis and never holds the analyser's lock while doing so.
 #[derive(Debug, uniffi::Object)]
 pub struct LiveAnalyser {
-    inner: Mutex<core::StreamAnalyser>,
+    inner: Mutex<Live>,
+    pending: Mutex<VecDeque<(UtteranceAudio, UtteranceContext)>>,
+    config: core::Config,
+}
+
+/// Ignores poisoning: a panic while holding a lock can't leave the analyser
+/// in a state worse than restarting it would.
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl LiveAnalyser {
-    fn lock(&self) -> MutexGuard<'_, core::StreamAnalyser> {
-        // A panic while holding the lock can't leave the analyser in a state
-        // worse than restarting it would, so ignore poisoning.
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    fn lock(&self) -> MutexGuard<'_, Live> {
+        lock(&self.inner)
+    }
+
+    /// Converts emitted frames, feeds them to the segmenter and queues any
+    /// finished utterances. Call with the analyser locked.
+    fn take_frames(&self, live: &mut Live, frames: Vec<core::Frame>) -> Vec<FrameResult> {
+        let out = frames
+            .iter()
+            .map(|f| {
+                live.segmenter.push_frame(f);
+                FrameResult::live(f, &live.context)
+            })
+            .collect();
+        self.queue_finished(live);
+        out
+    }
+
+    fn queue_finished(&self, live: &mut Live) {
+        if live.segmenter.pending() == 0 {
+            return;
+        }
+        let mut pending = lock(&self.pending);
+        while let Some(u) = live.segmenter.pop() {
+            pending.push_back((u, live.context));
+            while pending.len() > MAX_PENDING_UTTERANCES {
+                pending.pop_front();
+            }
+        }
     }
 }
 
@@ -542,35 +684,86 @@ impl LiveAnalyser {
             ));
         }
         let cfg = config(sample_rate, &settings)?;
+        let rate = f64::from(sample_rate);
         Ok(Arc::new(Self {
-            inner: Mutex::new(core::StreamAnalyser::new(f64::from(sample_rate), cfg)),
+            inner: Mutex::new(Live {
+                stream: core::StreamAnalyser::new(rate, cfg.clone()),
+                segmenter: core::UtteranceSegmenter::new(rate, UtteranceConfig::default()),
+                context: UtteranceContext::default(),
+            }),
+            pending: Mutex::new(VecDeque::new()),
+            config: cfg,
         }))
+    }
+
+    /// What frames and utterances are scored against from now on: the
+    /// vowel an exercise asks for (Hillenbrand code or IPA; enables
+    /// resonance scores) and the user's weight baseline (enables weight
+    /// indexes). `None` turns each off. An unknown vowel is an error.
+    pub fn set_feedback_context(
+        &self,
+        vowel: Option<String>,
+        weight_baseline: Option<WeightBaseline>,
+    ) -> Result<(), AnalysisError> {
+        let vowel = vowel
+            .map(|v| {
+                core::VowelNorm::find(&v).ok_or_else(|| invalid(&format!("unknown vowel {v}")))
+            })
+            .transpose()?;
+        self.lock().context = UtteranceContext {
+            vowel,
+            weight_baseline: weight_baseline.map(baseline_in),
+        };
+        Ok(())
+    }
+
+    /// Measures the utterances finished since the last call, oldest first.
+    /// Runs the batch analysis without holding the analyser's lock.
+    pub fn pull_utterances(&self) -> Vec<UtteranceSummary> {
+        let ready: Vec<_> = lock(&self.pending).drain(..).collect();
+        let qcfg = QualityConfig {
+            analysis: self.config.clone(),
+            ..QualityConfig::default()
+        };
+        let ucfg = UtteranceConfig::default();
+        ready
+            .iter()
+            .map(|(u, ctx)| UtteranceSummary::from(&core::summarise(u, &qcfg, &ucfg, ctx)))
+            .collect()
     }
 
     /// Seconds from a frame's centre until it can be pulled (analysis only;
     /// excludes audio-buffer and display latency).
     pub fn latency_s(&self) -> f64 {
-        self.lock().latency_s()
+        self.lock().stream.latency_s()
     }
 
     /// Adds mono samples. Ignored after `finish`.
     pub fn push(&self, samples: Vec<f32>) {
-        let mut s = self.lock();
-        if !s.is_finished() {
-            s.push(&samples);
+        let mut live = self.lock();
+        if !live.stream.is_finished() {
+            live.stream.push(&samples);
+            live.segmenter.push_samples(&samples);
         }
     }
 
     /// Frames ready since the last pull, oldest first.
     pub fn pull(&self) -> Vec<FrameResult> {
-        self.lock().drain().iter().map(FrameResult::from).collect()
+        let mut live = self.lock();
+        let frames = live.stream.drain();
+        self.take_frames(&mut live, frames)
     }
 
-    /// Ends the stream and returns the remaining frames.
+    /// Ends the stream and returns the remaining frames. The last utterance
+    /// is closed too; collect it with `pull_utterances`.
     pub fn finish(&self) -> Vec<FrameResult> {
-        let mut s = self.lock();
-        s.finish();
-        s.drain().iter().map(FrameResult::from).collect()
+        let mut live = self.lock();
+        live.stream.finish();
+        let frames = live.stream.drain();
+        let out = self.take_frames(&mut live, frames);
+        live.segmenter.finish();
+        self.queue_finished(&mut live);
+        out
     }
 }
 
@@ -687,6 +880,107 @@ mod tests {
                 .all(|f| f.spectral.is_some())
         );
         assert!(frames.iter().any(|f| f.spectral.is_some()));
+    }
+
+    fn speech(rate: u32) -> Vec<f32> {
+        let gap = vec![0.0f32; (rate / 2) as usize];
+        let mut x = gap.clone();
+        x.extend(tone(196.0, rate, 1.5));
+        x.extend(&gap);
+        x.extend(tone(147.0, rate, 1.2));
+        x.extend(&gap);
+        x
+    }
+
+    fn stream_all(live: &LiveAnalyser, x: &[f32]) -> Vec<FrameResult> {
+        let mut frames = Vec::new();
+        for chunk in x.chunks(240) {
+            live.push(chunk.to_vec());
+            frames.extend(live.pull());
+        }
+        frames
+    }
+
+    #[test]
+    fn live_utterances_are_summarised() {
+        let live = LiveAnalyser::new(44_100, default_settings()).unwrap();
+        stream_all(&live, &speech(44_100));
+        // Both utterances end with a 0.5 s gap, before finish.
+        let u = live.pull_utterances();
+        assert_eq!(u.len(), 2, "{u:#?}");
+        assert!(live.pull_utterances().is_empty());
+        assert!(u.iter().all(|u| u.scored));
+        let medians: Vec<f64> = u
+            .iter()
+            .map(|u| u.pitch.as_ref().unwrap().median_hz)
+            .collect();
+        assert!((medians[0] / 196.0 - 1.0).abs() < 0.01, "{medians:?}");
+        assert!((medians[1] / 147.0 - 1.0).abs() < 0.01, "{medians:?}");
+        assert!(
+            u[0].start_s > 0.45 && u[0].start_s < 0.55,
+            "{}",
+            u[0].start_s
+        );
+        assert!(
+            u[0].jitter_local.is_some() && u[0].cpps_db.is_some(),
+            "{:#?}",
+            u[0]
+        );
+        assert!(
+            u.iter()
+                .all(|u| u.resonance.is_none() && u.weight_index.is_none())
+        );
+    }
+
+    #[test]
+    fn finish_closes_the_last_utterance() {
+        let live = LiveAnalyser::new(16_000, default_settings()).unwrap();
+        stream_all(&live, &tone(180.0, 16_000, 1.2));
+        assert!(live.pull_utterances().is_empty());
+        live.finish();
+        assert_eq!(live.pull_utterances().len(), 1);
+    }
+
+    #[test]
+    fn context_adds_resonance_and_weight() {
+        let live = LiveAnalyser::new(16_000, default_settings()).unwrap();
+        assert!(live.set_feedback_context(Some("zz".into()), None).is_err());
+        let base = measure_voice_quality(tone(196.0, 16_000, 1.0), 16_000, default_settings())
+            .unwrap()
+            .weight_baseline;
+        live.set_feedback_context(Some("ah".into()), Some(base))
+            .unwrap();
+        let frames = stream_all(&live, &speech(16_000));
+        assert!(frames.iter().any(|f| f.resonance.is_some()));
+        assert!(frames.iter().any(|f| f.weight_index.is_some()));
+        assert!(
+            frames
+                .iter()
+                .filter(|f| f.spectral.is_none())
+                .all(|f| f.weight_index.is_none())
+        );
+        let u = live.pull_utterances();
+        assert!(u.iter().all(|u| u.weight_index.is_some()), "{u:#?}");
+        // Turning the context off stops the scores.
+        live.set_feedback_context(None, None).unwrap();
+        let frames = stream_all(&live, &speech(16_000));
+        assert!(
+            frames
+                .iter()
+                .all(|f| f.resonance.is_none() && f.weight_index.is_none())
+        );
+    }
+
+    #[test]
+    fn pending_utterances_are_capped() {
+        let live = LiveAnalyser::new(16_000, default_settings()).unwrap();
+        let mut x = Vec::new();
+        for _ in 0..12 {
+            x.extend(tone(180.0, 16_000, 0.3));
+            x.extend(vec![0.0f32; 8_000]);
+        }
+        stream_all(&live, &x);
+        assert_eq!(live.pull_utterances().len(), MAX_PENDING_UTTERANCES);
     }
 
     #[test]

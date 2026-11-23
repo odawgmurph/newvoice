@@ -2,7 +2,7 @@ import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
-import { formatHz, type BaselineSummary } from '../baseline/plan';
+import { formatHz, isBaselineSummary, type BaselineSummary } from '../baseline/plan';
 import { currentBaseline } from '../baseline/store';
 import { useApp, useDb } from '../state/AppState';
 import { Body, Button, Caption, Card, ExitButton, Overline, Screen, Title } from '../ui/kit';
@@ -14,13 +14,19 @@ export default function Home() {
   const { user, quickExit } = useApp();
   const db = useDb();
   const { c } = useTheme();
+  // `summary` is null for a provisional baseline from a practice session (Stage 3).
   const [baseline, setBaseline] = useState<{ summary: BaselineSummary | null; completedAt: Date | null } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let live = true;
       void currentBaseline(db, user?.baselineId).then((row) => {
-        if (live) setBaseline(row ? { summary: row.summary as BaselineSummary | null, completedAt: row.completedAt } : null);
+        if (!live) return;
+        setBaseline(
+          row
+            ? { summary: isBaselineSummary(row.summary) ? row.summary : null, completedAt: row.completedAt }
+            : null,
+        );
       });
       return () => {
         live = false;
@@ -41,7 +47,7 @@ export default function Home() {
         </>
       }
     >
-      {user.baselineId == null ? (
+      {user.baselineId == null || (baseline != null && baseline.summary == null) ? (
         <>
           <Overline>First step</Overline>
           <Title>Your starting point</Title>
@@ -49,6 +55,12 @@ export default function Home() {
             <Body>
               Six short recordings, about five minutes. Everything you practise is measured against them.
             </Body>
+            {user.baselineId != null ? (
+              <Caption>
+                You’re using a starting point from a practice session for now. Recording a full one also finds your
+                comfortable range.
+              </Caption>
+            ) : null}
             <Button label="Record your starting point" onPress={() => router.push('/baseline')} />
           </Card>
         </>
@@ -65,8 +77,12 @@ export default function Home() {
       <Overline>Coming next</Overline>
       <Title>Lessons</Title>
       <Card>
-        <Body>The lesson path arrives in a later stage. For now you can try the live trace.</Body>
-        <Button label="Live pitch and resonance trace" onPress={() => router.push('/capture')} />
+        <Body>
+          The lesson path arrives in a later stage. For now you can practise with live feedback on pitch and
+          brightness.
+        </Body>
+        <Button label="Practice feedback" onPress={() => router.push('/practice')} />
+        <Button label="Capture test" kind="secondary" onPress={() => router.push('/capture')} />
       </Card>
       <Button label="Settings" kind="secondary" onPress={() => router.push('/settings')} />
     </Screen>

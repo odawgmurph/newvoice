@@ -13,13 +13,22 @@ import AVFoundation
 /// the analyser saw, the frames it produced and what they cost. The clip is
 /// kept in memory and only written to disk when the user exports it (see
 /// `exportDiagnostics`).
+///
+/// The analyser also cuts the stream into utterances. A separate
+/// utility-priority queue measures the finished ones (`pullUtterances`, a
+/// batch analysis of each, a few hundred ms) about every 250 ms and when
+/// capture stops, so that work never delays the live frames.
 final class CaptureSession {
   /// Receives each batch of frames (on the analysis queue).
   var onFrames: (([String: Any?]) -> Void)?
   /// Receives capture info when the route changes or capture stops.
   var onInfo: (([String: Any?]) -> Void)?
+  /// Receives each finished utterance's summary (on the utterance queue).
+  var onUtterance: (([String: Any?]) -> Void)?
 
   private let queue = DispatchQueue(label: "app.newvoice.analysis", qos: .userInteractive)
+  private let utteranceQueue = DispatchQueue(label: "app.newvoice.utterances", qos: .utility)
+  private var lastUtterancePoll = DispatchTime.now()
   private let ring = SampleRing(capacity: 2 * 96_000)
   private var engine: AVAudioEngine?
   private var timer: DispatchSourceTimer?
@@ -52,14 +61,20 @@ final class CaptureSession {
 
   /// With `recordSeconds`, the capture also records a test clip and stops
   /// itself after that long.
+  /// `vowel` and `weightBaseline` are what frames and utterances are scored
+  /// against (resonance and weight index); nil turns each off.
   func start(
     formantCeilingHz: Double?,
     recordSeconds: Double?,
+    vowel: String? = nil,
+    weightBaseline: WeightBaseline? = nil,
     completion: @escaping (Result<[String: Any?], Error>) -> Void
   ) {
     queue.async {
       do {
-        try self.startOnQueue(formantCeilingHz: formantCeilingHz, recordSeconds: recordSeconds)
+        try self.startOnQueue(
+          formantCeilingHz: formantCeilingHz, recordSeconds: recordSeconds,
+          vowel: vowel, weightBaseline: weightBaseline)
         completion(.success(self.info()))
       } catch {
         self.stopOnQueue()
@@ -79,7 +94,10 @@ final class CaptureSession {
     queue.async { completion(self.info()) }
   }
 
-  private func startOnQueue(formantCeilingHz: Double?, recordSeconds: Double?) throws {
+  private func startOnQueue(
+    formantCeilingHz: Double?, recordSeconds: Double?,
+    vowel: String?, weightBaseline: WeightBaseline?
+  ) throws {
     stopOnQueue()
 
     let session = AVAudioSession.sharedInstance()
@@ -102,7 +120,10 @@ final class CaptureSession {
     if let ceiling = formantCeilingHz {
       settings.formantCeilingHz = ceiling
     }
-    analyser = try LiveAnalyser(sampleRate: UInt32(format.sampleRate.rounded()), settings: settings)
+    let analyser = try LiveAnalyser(sampleRate: UInt32(format.sampleRate.rounded()), settings: settings)
+    // Throws for an unknown vowel, which fails the start.
+    try analyser.setFeedbackContext(vowel: vowel, weightBaseline: weightBaseline)
+    self.analyser = analyser
     self.settings = settings
     sampleRate = format.sampleRate
     samplesPushed = 0
@@ -158,6 +179,11 @@ final class CaptureSession {
       NotificationCenter.default.removeObserver(o)
     }
     observers.removeAll()
+    if let analyser {
+      // Close the last utterance and measure it off this queue.
+      _ = analyser.finish()
+      pollUtterances(analyser)
+    }
     analyser = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
@@ -191,6 +217,10 @@ final class CaptureSession {
       newestFrameS = f.timeS
     }
     let now = DispatchTime.now()
+    if now.uptimeNanoseconds - lastUtterancePoll.uptimeNanoseconds >= 250_000_000 {
+      lastUtterancePoll = now
+      pollUtterances(analyser)
+    }
     guard !pending.isEmpty, now.uptimeNanoseconds - lastSend.uptimeNanoseconds >= 16_000_000
     else { return }
 
@@ -223,6 +253,56 @@ final class CaptureSession {
       "f1Hz": f1,
       "f2Hz": f2,
       "formantConfidence": f.formantConfidence,
+      "h1cH2cDb": f.spectral?.h1cH2cDb,
+      "alphaRatioDb": f.spectral?.alphaRatioDb,
+      "resonance": f.resonance,
+      "weightIndex": f.weightIndex,
+    ]
+  }
+
+  /// Measures finished utterances on the utterance queue and sends them out.
+  private func pollUtterances(_ analyser: LiveAnalyser) {
+    utteranceQueue.async { [weak self] in
+      let utterances = analyser.pullUtterances()
+      guard let self, !utterances.isEmpty else { return }
+      for u in utterances {
+        self.onUtterance?(Self.utterancePayload(u))
+      }
+    }
+  }
+
+  /// Matches `UtteranceSummary` in NewVoiceAudio.types.ts.
+  private static func utterancePayload(_ u: UtteranceSummary) -> [String: Any?] {
+    let pitch: [String: Any?]? = u.pitch.map { p in
+      [
+        "medianHz": p.medianHz,
+        "medianSt": p.medianSt,
+        "p10St": p.p10St,
+        "p90St": p.p90St,
+        "sdSt": p.sdSt,
+        "range5to95St": p.range595St,
+      ]
+    }
+    return [
+      "startS": u.startS,
+      "endS": u.endS,
+      "voicedS": u.voicedS,
+      "scored": u.scored,
+      "pitch": pitch,
+      "terminalSlopeStPerS": u.terminalSlopeStPerS,
+      "f1Hz": u.f1Hz,
+      "f2Hz": u.f2Hz,
+      "f3Hz": u.f3Hz,
+      "formantConfidence": u.formantConfidence,
+      "resonance": u.resonance,
+      "weightIndex": u.weightIndex,
+      "h1cH2cDb": u.h1cH2cDb,
+      "alphaRatioDb": u.alphaRatioDb,
+      "cppsDb": u.cppsDb,
+      "hnrDb": u.hnrDb,
+      "jitterLocal": u.jitterLocal,
+      "shimmerLocal": u.shimmerLocal,
+      "periods": Int(u.periods),
     ]
   }
 

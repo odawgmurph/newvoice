@@ -22,7 +22,7 @@ import { useApp, useDb } from '../state/AppState';
 import { Body, Bullet, Button, Caption, Card, Display, ErrorText, Heading, Overline, Screen, StepDots } from '../ui/kit';
 import { radius, space, type, useTheme, type Colors } from '../ui/theme';
 
-// Baseline capture (build plan Stage 4, D17): six short recordings measured
+// Baseline capture (build plan Stage 4, D20): six short recordings measured
 // on the phone by the Rust core. No live pitch is shown while recording, so
 // the baseline is the everyday voice rather than one steered by a readout;
 // only a level meter confirms the phone hears you. Results use neutral words

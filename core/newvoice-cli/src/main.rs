@@ -11,6 +11,8 @@
 //! newvoice-cli hnr    <wav>   (per-frame HNR track)
 //! newvoice-cli cpps   <wav>   (per-frame cepstral peak prominence)
 //! newvoice-cli bench  <wav> [--chunk N] [--repeat N]
+//! newvoice-cli utterances <wav> [--vowel CODE] [--chunk N]
+//!                    (streams the file as the phone does and summarises each utterance)
 //! ```
 
 use std::process::ExitCode;
@@ -23,8 +25,12 @@ use newvoice_core::quality::hnr::hnr_track;
 use newvoice_core::quality::spectral::FrameSpectral;
 use newvoice_core::quality::{QUALITY_VERSION, QualityConfig, quality_with_tracks};
 use newvoice_core::resonance::{RESONANCE_SCORE_VERSION, delta_f_position};
+use newvoice_core::utterance::UTTERANCE_VERSION;
 use newvoice_core::{
     Analysis, Config, StreamAnalyser, VowelConfig, analyse, measure_vowel, measure_vowel_between,
+};
+use newvoice_core::{
+    UtteranceConfig, UtteranceContext, UtteranceSegmenter, UtteranceSummary, summarise,
 };
 use newvoice_core::{VowelNorm, VowelToken, resonance_score};
 use serde_json::{Value, json};
@@ -60,11 +66,13 @@ fn run(args: &[String]) -> Result<Value, String> {
             Ok(json!({"times_s": t.times_s, "prominence_db": t.prominence_db}))
         }
         "bench" => Ok(bench(&samples, rate, &opts)),
+        "utterances" => Ok(utterances(&samples, rate, &opts)),
         _ => Err(USAGE.into()),
     }
 }
 
-const USAGE: &str = "usage: newvoice-cli <frames|vowel|quality|hnr|cpps|bench> <wav> [options]";
+const USAGE: &str =
+    "usage: newvoice-cli <frames|vowel|quality|hnr|cpps|bench|utterances> <wav> [options]";
 
 #[derive(Default)]
 struct Options {
@@ -392,5 +400,75 @@ fn quality(samples: &[f32], rate: f64, opts: &Options) -> Value {
             "cpps_db": opt(cpps.mean()),
             "hnr_db": opt(hnr.mean()),
         },
+    })
+}
+
+/// Streams the file through the live analyser and the utterance segmenter in
+/// `--chunk` sample chunks, as the phone does, and summarises each utterance.
+fn utterances(samples: &[f32], rate: f64, opts: &Options) -> Value {
+    let cfg = opts.config();
+    let ucfg = UtteranceConfig::default();
+    let mut s = StreamAnalyser::new(rate, cfg.clone());
+    let mut seg = UtteranceSegmenter::new(rate, ucfg);
+    for chunk in samples.chunks(opts.chunk.max(1)) {
+        s.push(chunk);
+        seg.push_samples(chunk);
+        for f in s.drain() {
+            seg.push_frame(&f);
+        }
+    }
+    s.finish();
+    for f in s.drain() {
+        seg.push_frame(&f);
+    }
+    seg.finish();
+    let qcfg = QualityConfig {
+        analysis: cfg,
+        ..QualityConfig::default()
+    };
+    let ctx = UtteranceContext {
+        vowel: opts.vowel,
+        weight_baseline: None,
+    };
+    let list: Vec<Value> = std::iter::from_fn(|| seg.pop())
+        .map(|u| utterance_json(&summarise(&u, &qcfg, &ucfg, &ctx)))
+        .collect();
+    json!({
+        "core_version": newvoice_core::VERSION,
+        "utterance_version": UTTERANCE_VERSION,
+        "quality_version": QUALITY_VERSION,
+        "utterances": list,
+    })
+}
+
+fn utterance_json(u: &UtteranceSummary) -> Value {
+    let q = &u.quality;
+    json!({
+        "start_s": u.start_s,
+        "end_s": u.end_s,
+        "voiced_s": u.voiced_s,
+        "scored": u.scored,
+        "pitch": u.pitch.as_ref().map(|p| json!({
+            "median_hz": p.median_hz,
+            "median_st": p.median_st,
+            "p10_st": p.p10_st,
+            "p90_st": p.p90_st,
+            "sd_st": p.sd_st,
+            "range_5_95_st": p.range_5_95_st,
+        })),
+        "terminal_slope_st_per_s": opt(u.terminal_slope_st_per_s),
+        "f1_hz": opt(u.formants_hz[0]),
+        "f2_hz": opt(u.formants_hz[1]),
+        "f3_hz": opt(u.formants_hz[2]),
+        "formant_confidence": u.formant_confidence,
+        "resonance": opt(u.resonance),
+        "weight_index": opt(u.weight_index),
+        "h1c_h2c_db": opt(q.h1c_h2c_db),
+        "alpha_ratio_db": opt(q.alpha_ratio_db),
+        "cpps_db": opt(q.cpps_db),
+        "hnr_db": opt(q.hnr_db),
+        "jitter_local": opt(q.jitter_local),
+        "shimmer_local": opt(q.shimmer_local),
+        "periods": q.periods,
     })
 }
