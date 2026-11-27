@@ -22,6 +22,13 @@
       "when": 1795442827215,
       "tag": "0002_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1795799014442,
+      "tag": "0003_lessons",
+      "breakpoints": true
     }
   ]
 }

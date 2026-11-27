@@ -5,7 +5,7 @@ import type { TaskResult } from '../../modules/newvoice-audio/src/NewVoiceAudio.
 import type { Db } from '../db/client';
 import { baseline, recording, session, user, type Baseline } from '../db/schema';
 import type { Baseline as FeedbackBaseline } from '../feedback/types';
-import type { BaselineSummary, BaselineTask } from './plan';
+import { isBaselineSummary, type BaselineSummary, type BaselineTask } from './plan';
 
 // Baseline rows, their recordings and kept audio. Audio, when the user keeps
 // it, lives at Documents/recordings/baseline-<id>/<task>.wav; native code
@@ -111,4 +111,20 @@ export async function saveProvisionalBaseline(
     .returning({ id: baseline.id });
   await db.update(user).set({ baselineId: b.id }).where(eq(user.id, 1));
   return b.id;
+}
+
+/** Completed full baselines, oldest first, with each task's kept audio (if any), for the progress timeline. */
+export async function completedBaselines(
+  db: Db,
+): Promise<{ id: number; completedAt: Date; summary: BaselineSummary; audio: Record<string, string> }[]> {
+  const rows = await db.select().from(baseline).orderBy(baseline.completedAt);
+  const out = [];
+  for (const r of rows) {
+    if (!r.completedAt || !isBaselineSummary(r.summary)) continue;
+    const recs = await db.select({ taskId: recording.taskId, uri: recording.localUri }).from(recording).where(eq(recording.baselineId, r.id));
+    const audio: Record<string, string> = {};
+    for (const x of recs) if (x.uri && new File(x.uri).exists) audio[x.taskId] = x.uri;
+    out.push({ id: r.id, completedAt: r.completedAt, summary: r.summary, audio });
+  }
+  return out;
 }

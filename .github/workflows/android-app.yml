@@ -1,0 +1,69 @@
+name: Android app (.apk)
+
+# Builds the Android app (Stage 2: built, not tested on a phone, D14, D25).
+# The APK is signed with the template's debug key, for sideloading only.
+# Runs on pushes that touch the app or the analysis core, and by hand.
+on:
+  push:
+    paths:
+      - "app/**"
+      - "core/**"
+      - ".github/workflows/android-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build NewVoice.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: android-app
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Use the runner's NDK
+        run: echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - run: cargo install cargo-ndk --version 4.1.2 --locked
+        working-directory: core
+
+      - name: Build the Rust core for Android and its Kotlin bindings
+        run: core/scripts/build-android-libs.sh app/modules/newvoice-audio/android
+
+      - name: Install JS dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Generate the Android project (Expo prebuild)
+        working-directory: app
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build (release, debug-signed)
+        working-directory: app/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NewVoice-apk
+          path: app/android/app/build/outputs/apk/release/*.apk
+          retention-days: 14

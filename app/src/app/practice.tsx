@@ -44,6 +44,8 @@ export default function Practice() {
   const { user, refreshUser } = useApp();
   const { c } = useTheme();
   const genderedBands = user?.genderedBands ?? false;
+  // Whisper mode (§4.3): formants only, no pitch, for practising quietly.
+  const whisper = user?.whisperMode ?? false;
   const goal = user?.goal ?? null;
 
   const [baseline, setBaseline] = useState<Baseline | null>(null);
@@ -225,13 +227,16 @@ export default function Practice() {
           <Caption>{MODE_LABELS[fading.mode].detail}</Caption>
         </View>
         <ScrollBody>
+          {whisper ? <Caption>Whisper mode: brightness only. Whisper a vowel and watch F2.</Caption> : null}
           {live ? (
             <View style={styles.readouts}>
+              {whisper ? null : (
               <Readout
                 label="Pitch"
                 value={readout?.pitchSt != null ? noteName(readout.pitchSt) : '—'}
                 sub={readout?.pitchSt != null ? `${Math.round(stToHz(readout.pitchSt))} Hz` : ' '}
               />
+              )}
               <Readout
                 label="F2"
                 value={readout?.f2Hz != null && readout.f2Visibility !== 'hidden' ? `${Math.round(readout.f2Hz)}` : '—'}
@@ -241,7 +246,7 @@ export default function Practice() {
             </View>
           ) : null}
 
-          {fading.mode !== 'summary' ? (
+          {fading.mode !== 'summary' && !whisper ? (
             <PitchTrace
               points={fading.trace}
               tEnd={live ? fading.now : (fading.trace[fading.trace.length - 1]?.t ?? 0)}

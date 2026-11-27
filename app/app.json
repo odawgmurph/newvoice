@@ -14,13 +14,19 @@
       }
     },
     "android": {
+      "package": "app.newvoice.spike",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,7 +51,16 @@
         {
           "faceIDPermission": "Unlock NewVoice with Face ID."
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "NewVoice listens to your voice to show pitch and resonance. Audio is analysed on this phone and never leaves it.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "./plugins/withAlternateIcons"
     ]
   }
 }

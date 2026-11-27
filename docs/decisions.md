@@ -290,3 +290,84 @@ The handbook's baseline (§4.3; Unit 0 in §4.1): sustained /a/ /i/ /u/, a glide
   - Whether the summary should ever show the resonance score, for example after the user opts into gendered bands (Stage 3).
   - The 4 ST and 0.1% thresholds, against real baselines.
   - Android, which needs its own native capture and analysis module (D12).
+
+## D21 · Curriculum engine, content and ear training (Stage 5; Units 7–10 for Stage 7)
+
+- **The curriculum is data.** `content/curriculum/curriculum.json` (schema version 1) holds Units 0–10 → lessons → exercises, plus the shared warm-up and cool-down. Metro bundles it from `../content` (`watchFolders`), so EAS Update can change it without an app release. `app/src/curriculum/validate.ts` checks it in CI (`curriculum.test.ts`) and again when the app loads it; the app refuses a file that fails. The checks: unique ids; both tracks list every unit and start with Setup; a warm-up of at least 3 minutes and a cool-down of at least 1; one checkpoint lesson per unit, last, holding the unit's gate; every gate has a machine-checkable criterion and is never a loud exercise; each criterion is one its exercise type can measure; brightness zones name a vowel the norms know; whisper and melody criteria have a reference exercise earlier in the unit; pitch-match targets stay within 4 ST of the zone centre; and the copy has no gendered or clinical words (D2, D3).
+- **Exercise types** (one renderer each in `app/src/lesson/exercises.tsx`): info, SOVT steps (E11), listen (§2.3), match-pitch (E1), glide (E2, E4, E5), hold (E3, E9, E14), whisper (E6, E7), vowel ladder (E9), read (E10, E15, E16, E19), free speech (Unit 9), self-rate (§4.1 "self-rating vs metrics"), mission (Unit 10) and journal.
+- **Unit gates are the handbook's unlock criteria (§4.1)**, implemented in `app/src/curriculum/criteria.ts`. Where the handbook left a choice, this is how it was read:
+  - *Unit 1:* a fixed 10-trial block at staircase level 4 (1 ST, 8% formant shift, 5 dB H1–H2), ≥ 80% correct. "≥ 80% on staircase at set difficulty" can't be met inside an adaptive run, which hovers at 79%.
+  - *Unit 2:* E1's check: a window of ≥ 600 ms whose median F0 is within ±50 cents of the target, on 8 of 10 notes. Voiced runs bridge gaps of up to 30 ms, as the jitter tracker does (D10). Targets are offsets around the current pitch-zone centre, capped 0.5 ST under the comfortable p90.
+  - *Unit 3:* "weight index ≥ baseline + 0.5 SD over 3 sessions" is read as *lighter* by 0.5 SD: the median weight index of scored utterances ≤ −0.5 (positive is heavier, D10), in three separate sessions, with no utterance above the comfortable p90.
+  - *Unit 4:* "whispered F2 +8% vs baseline". The baseline has no whisper, so Unit 4's first lesson records the user's ordinary whisper as the reference; the checkpoint compares against the latest one. A reading needs 0.5 s of frames with formants at confidence ≥ 0.5 (whispered frames get exactly 0.5, D11).
+  - *Unit 5:* resonance score ≥ 0.5 on 6 of 7 vowels (/i ɪ e ɛ æ ɑ ʌ/), capped at the goal's position (0.5 for androgynous). The "own" goal has no reference position, so its target is the baseline score + 0.15, capped at 0.5.
+  - *Unit 6:* ≥ 70% of voiced frames in both the pitch and the F2 zone on a 20-word /i/ list. Because the words share a vowel, the F2 zone applies. Frames with formant confidence under 0.5 are left out of the F2 share rather than failed.
+  - *Unit 7:* E15's "+3 ST over baseline". The baseline's reading range is over a whole passage and isn't comparable with per-phrase ranges, so Unit 7's first lesson records an everyday reading of the same kind of lines as the reference. The median phrase range must be ≥ the reference + 3 ST, and ≥ 50% of questions must end rising (> +2 ST/s, §3.5).
+  - *Unit 8:* "self-rated + metrics": mean self-rating ≥ 6/10 and ≥ 50% of voiced frames in the pitch zone. The /s/ centre of gravity (Stage 7 plan) is not measured: it needs ≥ 22.05 kHz with no roll-off, which the phone path doesn't guarantee yet.
+  - *Unit 9:* "stable metrics in free speech": a 60 s talk passes when its median F0 is in the pitch zone, and the gate needs three sessions whose medians are within 2.5 ST of each other. On 40 LibriSpeech readers split into three ~15 s sessions (the strain fixture, D18), 2.5 ST holds for 33 of 40; the 1.5 ST first tried held for only 25 (`stability.test.ts`). Resonance isn't scored in free speech (no alignment in v1).
+  - *Unit 10:* self-reported missions.
+- **Progression.** Units open in track order when the previous unit's gate is met; lessons in a unit open one after another; a lesson is done when each of its exercises has met its criterion. The resonance-first track runs 0, 1, 4, 5, 2, 3, 6–10 (§2.1).
+- **Quiet mode** skips exercises marked `loud`; the validator stops a loud exercise from being a gate, so quiet mode never blocks a unit. Onboarding's "quiet only" environment turns quiet mode on.
+- **Not included:** E13 soft onsets (no validated attack-time measure on the phone yet), E17 shadowing (needs consented, licensed voices) and E18 negative practice (the handbook warns it can be hard for dysphoric users). The LPC "wave" view stays deferred (D17).
+- **Ear-training stimuli are synthesised on the phone** (`app/src/eartraining/synth.ts`): a harmonic source (−6 dB/octave) through a five-formant Klatt cascade. F1–F3 sit midway between the Hillenbrand groups for the vowel (/ɑ æ ɛ ɪ/, roving), F4 and F5 at 1.3 and 1.6 × F3. Without an F5, LPC put its spare pole between F1 and F2. Base F0 roves over 130–220 Hz. Pitch pairs differ in F0 only, brightness pairs in a formant scale factor only, weight pairs in H1–H2 only (H1 +0.8Δ, slope −0.2Δ dB/octave, so H1–H2 changes by exactly Δ). Each sound is normalised to the same RMS.
+  - `harness/tests/test_eartraining.py` renders pairs at the easiest, checkpoint and finest levels and measures them: Praat F0 shows the asked semitones (within 1%) and no F0 change elsewhere; the spectrum shows the asked H1–H2 change on weight pairs, and on other pairs only the change the formant envelope predicts (an independent Python resonator). Praat formants (wide poles dropped, D8), on the same pair re-rendered at 100 Hz F0 where LPC is reliable, are within 8% of the targets, and brightness pairs differ by the asked ratio within 2%.
+  - Synthesis rather than shipped recordings: any difference size the staircase asks for, nothing to license, and nothing to download. **Pending:** natural-voice stimuli (for example LibriSpeech through Praat's "Change gender", CC BY 4.0) once synthetic items have been tried.
+- **Staircase:** 3-down/1-up, which converges on 79.4% correct (Levitt 1971), the handbook's ~80%. Ten levels per dimension: pitch 4 → 0.15 ST, brightness 20 → 2% (spanning §2.3's 5–20%), weight 12 → 1 dB.
+- **Playback** uses `expo-audio` (SDK 58), with background playback and background recording off in its config plugin. Stimuli are written to the cache folder and played; recorded audio is never played here.
+- **Still pending (D4):** the content licence. The curriculum is Apache-2.0 with the rest of the repository until the owner decides; CC BY-SA 4.0 is the recommended alternative.
+
+## D22 · Learning loop: refreshers, feedback fading, motivation (Stage 6)
+
+All pure TypeScript in `app/src/learning/`, tested by `learning.test.ts`, which includes an 8-week simulation (the Stage 6 exit).
+
+- **Skills.** Each lesson is a skill for refreshers and mastery (`skill_state` row `lesson:<id>`); each unit holds the target level (`unit:<id>`).
+- **Refreshers: half-life regression adapted to motor skills** (`hlr.ts`). p = 2^(−Δ/h), h = 2^(θ·x), x = (1, √(1+successes), √(1+failures)), as in Settles & Meeder (2016). Recall is replaced by measured performance: a refresher's `Outcome.performance` (0–1, how much of the criterion was met). θ is learned per skill on the phone with the paper's loss, changed in two ways for single online updates:
+  - the half-life term is (log₂ h − log₂ ĥ)²; with the paper's (h − ĥ)² a run of good refreshers overshot and collapsed h to its floor;
+  - the regulariser pulls θ toward the starting weights (−1, 1, −0.5), not toward zero. Those weights give about a day after the first success, ~3 days after 9 and ~12 after 25.
+  - α 0.1, λ 0.01, learning rate 0.05; h is clamped to 6 hours–120 days. A refresher is due when predicted performance falls to 0.5. In the simulation a learner who keeps a skill reaches h ≈ 68 days and one who loses it settles near 3.
+  - Written from the paper's equations, not Duolingo's code, so there's no MIT notice to carry (D5).
+- **Mastery** moves halfway to each run's performance, after decaying by the predicted retention since the last success (§4.2).
+- **Feedback fading (§2.5).** Below mastery 0.4 every item gets live feedback; from 0.4 to 0.75, alternate items (50%); from 0.75, summary only. The why-line (knowledge of performance) shows below mastery 0.5, and always on checkpoints and failed attempts; above that, results only.
+- **Practice order:** authored (blocked) until a lesson has been passed once, random afterwards and in refreshers (§2.5).
+- **Challenge point:** over the unit's last 5 scored attempts, more than 80% passed steps the target level up (zones.ts: +1 ST or +3% F2), under 70% steps it down. Zones still stop at the comfortable p90, so a higher level never asks for more than is comfortable.
+- **Session plan** (`plan.ts`): the most overdue refreshers (at most 2), then the next lesson, if they fit in what is left of the 20-minute soft cap and the hour a day, minus 4 minutes for the warm-up and cool-down.
+- **Motivation with guardrails** (`motivation.ts`):
+  - XP: 2 per voiced minute up to 40 a day (20 minutes), 0.5 per listening answer up to 15, 5 per lesson up to 15. Practising past one session's worth earns nothing more.
+  - Streaks: any practice counts a day, listening included. Up to 2 missed days per trailing week are credited as rest. Days marked as voice rest or illness, and hard-stop days, keep a streak alive without adding to it. Today never breaks it.
+  - No hearts or lives anywhere.
+  - The home screen celebrates process (consistency, minutes, a wider comfortable range), never outcomes.
+
+## D23 · Safety layer and the rest of Stage 4
+
+- **Safety limits** (`app/src/safety/rules.ts`, constants, no setting changes them; D2):
+  - 3-minute warm-up (lip trills, hum, "ng" slides) before voiced practice, valid for an hour;
+  - 1-minute cool-down;
+  - 20-minute session soft cap, at which the lesson moves to the cool-down;
+  - 60-minute daily maximum, which blocks even a new warm-up but never the cool-down.
+  - Voiced time is counted as capture time plus SOVT step time, so it errs high.
+- **Check-in and hard stop.** Before the day's first voiced exercise the user is asked about the stop-rule symptoms (§2.4). Reporting any, at the check-in or with the stop button on every voiced exercise, ends voiced practice until tomorrow (a `hard-stop` rest day), cool-down included. Listening, reading and the journal stay open.
+- **Referral copy** (ENT or laryngologist, plus speech-language pathologist) shows at once for pain or blood, and for hoarseness reported across ≥ 14 days with the latest report within 3 days. Copy is education-only (D3) and tested for it.
+- **The strain monitor (D18)** watches every lesson's utterances for the whole session (in memory; a session ends after 30 minutes idle). Effort is asked after each voiced exercise.
+- **Quick-exit gesture: shake.** Three jolts over 2.5 g within 1.2 s, each at least 120 ms apart (`app/src/privacy/shake.ts`; walking and setting the phone down don't trigger it). On by default, with a setting. It listens only while the app is unlocked and showing.
+- **Discreet icon (iOS):** two neutral alternate icons (dots, waves) generated into the asset catalog by `plugins/withAlternateIcons.js` and set through a small local module, `modules/newvoice-discreet`. iOS can't change an app's name at runtime.
+  - **Pending decision:** a neutral display name for release builds (chosen at build time).
+  - **Pending:** Android (activity aliases).
+  - Store rules: alternate icons must not imitate other apps, which these don't.
+- **Developer tools (settles D13's pending decision).** The capture test and diagnostics export are behind Settings → Developer tools, off by default. The route redirects home without it.
+- **Whisper mode** hides pitch on the free-practice screen. **Quiet mode** skips loud exercises (D21).
+- **Privacy policy drafted** (`docs/privacy-policy.md`, same text in Settings → Privacy, kept in step by a test). It is a draft until counsel reviews it (D3).
+- **Compiles; not yet tested on a phone.** The new Swift module and the config plugin were checked with an Expo prebuild on Linux (icon sets and build settings present, no background audio mode), and the unsigned `.ipa` with them builds (iOS build run 24, Nov 27).
+
+## D24 · "How the numbers work" page (Stage 9, written early)
+
+- `docs/how-the-numbers-work.md` and the in-app page (Home → How the numbers work) come from one source, `app/src/content/numbersCopy.ts`. `app/scripts/copy-docs.mjs` writes both docs; a test fails if they drift. It covers pitch, brightness and its confidence at high F0, weight as an unvalidated heuristic, melody, the strain signs and their synthetic evidence, and the one-phone accuracy check. It states that there is no pass/fail and no claim about how anyone will be heard.
+
+## D25 · Android capture (Stage 2: built, not tested on a phone)
+
+- **Same JavaScript API as iOS.** `app/modules/newvoice-audio/android/` implements `NewVoiceAudio` in Kotlin: `start`, `stop`, `getCaptureInfo`, `analyseLastClip`, `discardLastClip`, `coreVersion` and `resonanceScore`, with the same event payloads (`onFrames`, `onUtterance`, `onCaptureInfo`). `exportDiagnostics` rejects on Android for now; the device-matrix scoring is iOS-only until an Android tester needs it (D14).
+- **Capture.** `AudioRecord` at 48 kHz (falling back to 44.1), mono 32-bit float. The source is `UNPROCESSED` when `AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED` says the device supports it, otherwise `VOICE_RECOGNITION`. Any AGC, noise suppressor or echo canceller attached to the session is switched off. The capability report sets `measurementMode` true only for `UNPROCESSED`, so the baseline's reduced-accuracy warning and the capture test show when the device fell back. Bluetooth (SCO, LE headset) is flagged from the routed device.
+- **Analysis thread.** An urgent-audio-priority thread reads 5 ms blocks into the Rust `LiveAnalyser`, sends frame batches about every 16 ms, and polls utterance summaries about every 250 ms on a separate executor, as on iOS (D12, D17). Baseline tasks (D20) run the same recording-path analysis (`TaskAnalysis.kt`). Kept audio goes to `filesDir/recordings/…` (expo-file-system's `Paths.document`), refusing any other path.
+- **Packaging.** `core/scripts/build-android-libs.sh` builds `libnewvoice_ffi.so` for arm64-v8a, armeabi-v7a and x86_64 at API 24 with cargo-ndk, and generates the UniFFI Kotlin API. Both are written into the module and not committed. UniFFI's Kotlin bindings call Rust through JNA (Apache-2.0 option of its dual licence; listed in `NOTICE`), with keep rules for R8.
+- **CI.** `.github/workflows/android-app.yml` builds a release APK (first green build Nov 27, so the Kotlin compiles against the generated bindings) signed with the template's debug key and uploads it as an artifact, for anyone who wants to sideload it. Nobody tests it on a phone (D14); Android users' reports and PRs are how it improves.
+- **App config.** `android.package` is `app.newvoice.spike`, matching the iOS bundle ID until the release ID is chosen. The template's storage and overlay permissions are blocked; the app asks only for the microphone (plus biometrics and the defaults React Native needs).
+- **Not on Android yet:** the discreet icon (activity aliases, D23), the diagnostics export, and an app-switcher shield using `FLAG_SECURE` (the JavaScript shield covers the app when it goes inactive, but Android may take its recents snapshot first). **Pending.**

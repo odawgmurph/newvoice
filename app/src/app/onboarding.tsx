@@ -93,6 +93,8 @@ export default function Onboarding() {
       goal,
       goalNote: goal === 'own' ? goalNote.trim() || null : null,
       environment,
+      // "Quiet only" turns on quiet mode: loud exercises are skipped (§4.3).
+      quietMode: environment === 'quiet_only',
       language: language.trim() || null,
       hormoneSurgeryStatus: context,
       slpStatus: slp,
