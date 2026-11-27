@@ -7,7 +7,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 
-import { Cover, DbErrorScreen, LockScreen, SwitcherShield } from '../privacy/Gates';
+import { Cover, DbErrorScreen, LockScreen, ShakeToExit, SwitcherShield } from '../privacy/Gates';
 import { AppStateProvider, useApp } from '../state/AppState';
 import { ExitButton } from '../ui/kit';
 import { fonts, useTheme } from '../ui/theme';
@@ -29,6 +29,7 @@ export default function RootLayout() {
       <StatusBar style="auto" />
       {fontsLoaded || fontError ? <Gate /> : <View style={{ flex: 1, backgroundColor: c.surface100 }} />}
       <SwitcherShield />
+      <ShakeToExit />
     </AppStateProvider>
   );
 }
@@ -59,7 +60,14 @@ function Gate() {
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       {/* No swipe-back mid-recording; the header's back button still works. */}
       <Stack.Screen name="baseline" options={{ title: 'Starting point', gestureEnabled: false }} />
-      <Stack.Screen name="practice" options={{ title: 'Practice feedback' }} />
+      <Stack.Screen name="practice" options={{ title: 'Free practice' }} />
+      {/* No swipe-back mid-exercise; the header's back button still works. */}
+      <Stack.Screen name="lesson/[id]" options={{ title: 'Lesson', gestureEnabled: false }} />
+      <Stack.Screen name="journal" options={{ title: 'Journal' }} />
+      <Stack.Screen name="progress" options={{ title: 'Progress' }} />
+      <Stack.Screen name="voice-care" options={{ title: 'Voice care' }} />
+      <Stack.Screen name="about-numbers" options={{ title: 'How the numbers work' }} />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy' }} />
       <Stack.Screen
         name="capture"
         options={{

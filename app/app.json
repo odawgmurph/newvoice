@@ -45,7 +45,16 @@
         {
           "faceIDPermission": "Unlock NewVoice with Face ID."
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "NewVoice listens to your voice to show pitch and resonance. Audio is analysed on this phone and never leaves it.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "./plugins/withAlternateIcons"
     ]
   }
 }

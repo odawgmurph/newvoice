@@ -16,6 +16,8 @@ export type Goal = (typeof GOALS)[number];
 export const ENVIRONMENTS = ['private', 'shared', 'quiet_only'] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];
 
+export const TRACKS = ['default', 'resonance-first'] as const;
+
 /** One row (id 1): the person using this phone. No account, nothing leaves the device. */
 export const user = sqliteTable('user', {
   id: integer('id').primaryKey(),
@@ -45,6 +47,18 @@ export const user = sqliteTable('user', {
   onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
   /** The current baseline (a completed row of `baseline`); null until one is recorded. */
   baselineId: integer('baseline_id'),
+  /** Curriculum order (handbook §2.1): the default, or resonance first (TVL-style). */
+  track: text('track', { enum: TRACKS }).notNull().default('default'),
+  /** Quiet mode: loud exercises are skipped (handbook §4.3 quiet and whisper modes). */
+  quietMode: integer('quiet_mode', { mode: 'boolean' }).notNull().default(false),
+  /** Whisper mode: the practice screen shows formants only, no pitch (§4.3). */
+  whisperMode: integer('whisper_mode', { mode: 'boolean' }).notNull().default(false),
+  /** Shaking the phone triggers quick exit (§4.3). */
+  shakeToExit: integer('shake_to_exit', { mode: 'boolean' }).notNull().default(true),
+  /** Opt-in: show how measurements changed between starting points (Stage 7 progress timeline). */
+  progressTimeline: integer('progress_timeline', { mode: 'boolean' }).notNull().default(false),
+  /** Developer tools: the capture test and diagnostics export (D13), off by default. */
+  developerTools: integer('developer_tools', { mode: 'boolean' }).notNull().default(false),
 });
 
 /**
@@ -71,6 +85,44 @@ export const session = sqliteTable('session', {
   cooldownDone: integer('cooldown_done', { mode: 'boolean' }).notNull().default(false),
   /** Self-reported effort, 0–10; ≥6 triggers a rest prompt (handbook §2.4). */
   effortRating: integer('effort_rating'),
+  /** What the session was. */
+  kind: text('kind', { enum: ['baseline', 'practice', 'lesson'] }),
+  /** Voiced practice in seconds (warm-up and cool-down included): the daily limit counts this (§2.4). */
+  voicedS: real('voiced_s').notNull().default(0),
+  /** Ear-training answers, for XP. */
+  listenTrials: integer('listen_trials').notNull().default(0),
+  lessonsDone: integer('lessons_done').notNull().default(0),
+});
+
+/** One try at one exercise (Stage 5). Criteria and the scheduler read these. */
+export const attempt = sqliteTable('attempt', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+  sessionId: integer('session_id').references(() => session.id, { onDelete: 'set null' }),
+  lessonId: text('lesson_id').notNull(),
+  exerciseId: text('exercise_id').notNull(),
+  /** A refresher run of an already learned lesson (Stage 6). */
+  refresher: integer('refresher', { mode: 'boolean' }).notNull().default(false),
+  passed: integer('passed', { mode: 'boolean' }).notNull(),
+  /** `Outcome` from src/curriculum/criteria.ts. */
+  outcome: text('outcome', { mode: 'json' }).notNull(),
+  /** Numbers later criteria compare with (a reference whisper's F2, a reference reading's range). Never audio. */
+  evidence: text('evidence', { mode: 'json' }),
+});
+
+/** Symptoms reported at a check-in or with the stop button (handbook §2.4). */
+export const symptomReport = sqliteTable('symptom_report', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+  /** `Symptom[]` from src/safety/rules.ts; empty means "feels fine". */
+  symptoms: text('symptoms', { mode: 'json' }).notNull(),
+});
+
+/** Days marked as voice rest or illness; they keep a streak (§4.2 streak freeze). */
+export const restDay = sqliteTable('rest_day', {
+  /** Local day, YYYY-MM-DD. */
+  day: text('day').primaryKey(),
+  reason: text('reason', { enum: ['voice-rest', 'illness', 'hard-stop'] }).notNull(),
 });
 
 export const recording = sqliteTable('recording', {
@@ -90,19 +142,33 @@ export const recording = sqliteTable('recording', {
   analysisVersion: text('analysis_version').notNull(),
 });
 
+/** Per skill (a lesson): mastery and the refresher model (Stage 6, src/learning/hlr.ts). */
 export const skillState = sqliteTable('skill_state', {
   skillId: text('skill_id').primaryKey(),
   mastery: real('mastery').notNull().default(0),
   halfLifeDays: real('half_life_days'),
   lastSuccessAt: integer('last_success_at', { mode: 'timestamp_ms' }),
+  /** Half-life regression weights, learned on the phone. */
+  weights: text('weights', { mode: 'json' }),
+  successes: integer('successes').notNull().default(0),
+  failures: integer('failures').notNull().default(0),
+  /** Target level (zones.ts steps), moved by the challenge-point rule. */
+  level: integer('level').notNull().default(0),
 });
 
 export const journal = sqliteTable('journal', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   createdAt: createdAt(),
   text: text('text').notNull(),
+  /** 1–5, optional. */
   mood: integer('mood'),
+  /** The question it answers, when written in a lesson. */
+  prompt: text('prompt'),
+  lessonId: text('lesson_id'),
 });
 
 export type User = typeof user.$inferSelect;
+export type Attempt = typeof attempt.$inferSelect;
+export type SkillStateRow = typeof skillState.$inferSelect;
+export type Track = (typeof TRACKS)[number];
 export type Baseline = typeof baseline.$inferSelect;

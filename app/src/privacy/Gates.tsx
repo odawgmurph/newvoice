@@ -1,3 +1,4 @@
+import { Accelerometer } from 'expo-sensors';
 import { useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, View } from 'react-native';
 
@@ -5,6 +6,7 @@ import { useApp } from '../state/AppState';
 import { Body, Button, ErrorText, Field, Gap, Screen, Title } from '../ui/kit';
 import { type } from '../ui/theme';
 import { PIN_MAX } from './pin';
+import { ShakeDetector } from './shake';
 import { biometricEnabled, checkPin, unlockWithBiometrics } from './pinStore';
 
 /** PIN (and optional Face ID) unlock. Shows no app name or content. */
@@ -148,3 +150,22 @@ const styles = StyleSheet.create({
   pin: { ...type.readout, letterSpacing: 8, textAlign: 'center' },
   cover: { flex: 1, backgroundColor: '#000' },
 });
+
+/**
+ * Shake to exit (handbook §4.3 quick-exit gesture). Listens to the
+ * accelerometer only while the app is open and the setting is on.
+ */
+export function ShakeToExit() {
+  const { user, covered, locked, quickExit, status } = useApp();
+  const on = status.kind === 'ready' && !covered && !locked && (user?.shakeToExit ?? true);
+  useEffect(() => {
+    if (!on) return;
+    const detector = new ShakeDetector();
+    Accelerometer.setUpdateInterval(50);
+    const sub = Accelerometer.addListener(({ x, y, z }) => {
+      if (detector.push(x, y, z, Date.now())) quickExit();
+    });
+    return () => sub.remove();
+  }, [on, quickExit]);
+  return null;
+}
