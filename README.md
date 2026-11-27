@@ -10,7 +10,7 @@ NewVoice is an education app. It is not therapy and does not diagnose or treat a
 - the curriculum, Units 0–10, with ear training and the hard-coded safety layer (Stages 5 and 7);
 - the learning loop: refreshers, feedback fading and capped motivation (Stage 6, done).
 
-Capture (Stage 2) works on the owner's iPhone; Android capture is still to come. Reviews and the beta (Stage 8) need people. See [`docs/build-plan.md`](docs/build-plan.md), [how the numbers work](docs/how-the-numbers-work.md) and the draft [privacy policy](docs/privacy-policy.md).
+Capture (Stage 2) works on the owner’s iPhone; Android capture is built in CI but untested on a phone. Reviews and the beta (Stage 8) need people. See [`docs/build-plan.md`](docs/build-plan.md), [how the numbers work](docs/how-the-numbers-work.md) and the draft [privacy policy](docs/privacy-policy.md).
 
 ## Repository
 

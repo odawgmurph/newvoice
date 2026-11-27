@@ -30,6 +30,11 @@ packages (MIT, Copyright (c) 2020 Expo):
   DM Mono: Copyright 2020 The DM Mono Project Authors
     (https://www.github.com/googlefonts/dm-mono)
 
+The Android app links Java Native Access (JNA), used under the Apache
+License 2.0 (JNA is dual-licensed LGPL-2.1 / Apache-2.0),
+Copyright (c) 2007-2025 Timothy Wall and JNA contributors
+(https://github.com/java-native-access/jna).
+
 ----------------------------------------------------------------------------
 THE MARGARITA CLAUSE 
 
