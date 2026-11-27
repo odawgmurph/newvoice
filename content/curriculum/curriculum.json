@@ -1,0 +1,1078 @@
+{
+  "schemaVersion": 1,
+  "contentVersion": "2026.11.27-1",
+  "tracks": {
+    "default": ["u0", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10"],
+    "resonance-first": ["u0", "u1", "u4", "u5", "u2", "u3", "u6", "u7", "u8", "u9", "u10"]
+  },
+  "warmup": {
+    "id": "warmup",
+    "type": "sovt",
+    "role": "warmup",
+    "title": "Warm-up",
+    "prompt": "Three easy minutes to get your voice moving. Keep everything gentle and quiet.",
+    "source": ["§2.4", "E11"],
+    "volume": "quiet",
+    "pass": { "kind": "completion" },
+    "steps": [
+      { "label": "Lip trills", "how": "Let your lips flutter on a breath, like a motorboat, sliding up and down a little. Hold your cheeks lightly if they won’t buzz.", "seconds": 60 },
+      { "label": "Hum on “mm”", "how": "Hum with your lips closed, gliding gently around your speaking pitch. You should feel a buzz on your lips.", "seconds": 60 },
+      { "label": "“ng” slides", "how": "Hum “ng”, as at the end of “sing”, and slide up and back down. Only as far as is easy.", "seconds": 60 }
+    ]
+  },
+  "cooldown": {
+    "id": "cooldown",
+    "type": "sovt",
+    "role": "cooldown",
+    "title": "Cool-down",
+    "prompt": "A minute to settle your voice after practice.",
+    "source": ["§2.4", "E11"],
+    "volume": "quiet",
+    "pass": { "kind": "completion" },
+    "steps": [
+      { "label": "Downward sighs", "how": "Sigh gently on “hmm”, gliding from a comfortable middle note down to low.", "seconds": 30 },
+      { "label": "Easy hum", "how": "Hum quietly at a relaxed, low-ish pitch. Let your jaw and shoulders drop.", "seconds": 30 }
+    ]
+  },
+  "units": [
+    {
+      "id": "u0",
+      "number": 0,
+      "title": "Setup",
+      "dimension": "setup",
+      "summary": "How practice works, how to keep your voice safe, and your starting point.",
+      "gate": "u0-baseline",
+      "lessons": [
+        {
+          "id": "u0-l1",
+          "title": "How this works",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u0-how",
+              "type": "info",
+              "title": "Many small changes",
+              "prompt": "",
+              "source": ["Key Findings 1", "§2.1"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "A voice is shaped by several things at once: pitch, brightness (resonance), weight and melody. No single number decides how a voice comes across, so NewVoice trains them one at a time and then together.",
+                "Every target is measured against your own starting point and the goal you chose, and rises in small steps. There is no pass or fail for your voice, only practice."
+              ]
+            },
+            {
+              "id": "u0-safety",
+              "type": "info",
+              "title": "Keeping your voice safe",
+              "prompt": "",
+              "source": ["§2.4"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Each session starts with a three-minute warm-up and ends with a short cool-down. Sessions stop at about 20 minutes, with at most an hour a day. Short sessions spread through the week build a voice better than long ones.",
+                "Stop if anything hurts, your throat feels raw, you sound hoarse afterwards, or your voice cuts out. The stop button is on every voice exercise.",
+                "Nothing is rewarded above the top of your comfortable range."
+              ]
+            },
+            {
+              "id": "u0-journal",
+              "type": "journal",
+              "title": "Why you’re here",
+              "prompt": "Optional. Only you can read this; it stays on this phone.",
+              "source": ["§4.5"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "questions": ["What would you like your voice to do for you?"]
+            }
+          ]
+        },
+        {
+          "id": "u0-l2",
+          "title": "Your starting point",
+          "minutes": 6,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u0-baseline",
+              "type": "info",
+              "title": "Record your starting point",
+              "prompt": "",
+              "source": ["§4.1 Unit 0", "§4.3"],
+              "volume": "normal",
+              "pass": { "kind": "baseline-stored" },
+              "body": [
+                "Six short recordings in your everyday voice: three held vowels, a slide, a few sentences and 30 seconds of talking. Everything after this is measured against them.",
+                "It takes about five minutes. Find a quiet spot."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u1",
+      "number": 1,
+      "title": "Hearing",
+      "dimension": "hearing",
+      "summary": "Train your ear to hear pitch, brightness and weight before you change them.",
+      "gate": "u1-check",
+      "lessons": [
+        {
+          "id": "u1-l1",
+          "title": "Hearing pitch",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u1-pitch",
+              "type": "listen",
+              "title": "Which is higher?",
+              "prompt": "You’ll hear two sounds. Pick the higher one. The differences get smaller as you go.",
+              "source": ["§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "dimension": "pitch",
+              "format": "ab",
+              "trials": 15
+            }
+          ]
+        },
+        {
+          "id": "u1-l2",
+          "title": "Hearing brightness",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u1-bright-info",
+              "type": "info",
+              "title": "Brightness is not pitch",
+              "prompt": "",
+              "source": ["§1.3", "§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Two sounds can have the same pitch and still differ: one sounds smaller and brighter, the other bigger and darker. That is resonance, the shape of the space your voice passes through.",
+                "In these pairs the pitch stays the same. Listen for size."
+              ]
+            },
+            {
+              "id": "u1-bright",
+              "type": "listen",
+              "title": "Which is brighter?",
+              "prompt": "Same pitch, different size. Pick the brighter, smaller-sounding one.",
+              "source": ["§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "dimension": "brightness",
+              "format": "ab",
+              "trials": 15
+            }
+          ]
+        },
+        {
+          "id": "u1-l3",
+          "title": "Hearing weight",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u1-weight",
+              "type": "listen",
+              "title": "Which is lighter?",
+              "prompt": "Same pitch, same vowel. One has more buzz and heft. Pick the lighter one.",
+              "source": ["§1.4", "§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "dimension": "weight",
+              "format": "ab",
+              "trials": 15
+            }
+          ]
+        },
+        {
+          "id": "u1-l4",
+          "title": "Odd one out",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u1-odd",
+              "type": "listen",
+              "title": "Odd one out",
+              "prompt": "Three sounds; two are the same. Pick the one that is brighter or darker than the others.",
+              "source": ["§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "dimension": "brightness",
+              "format": "odd-one-out",
+              "trials": 12
+            }
+          ]
+        },
+        {
+          "id": "u1-l5",
+          "title": "Hearing check",
+          "minutes": 3,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u1-check",
+              "type": "listen",
+              "title": "Brightness check",
+              "prompt": "Ten pairs at a set difference. Pick the brighter one each time.",
+              "source": ["§4.1 Unit 1", "§2.3"],
+              "volume": "silent",
+              "pass": { "kind": "staircase", "accuracy": 0.8, "level": 4, "trials": 10 },
+              "dimension": "brightness",
+              "format": "ab",
+              "trials": 10,
+              "level": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u2",
+      "number": 2,
+      "title": "Pitch",
+      "dimension": "pitch",
+      "summary": "Find your comfortable range and land on a target note.",
+      "gate": "u2-check",
+      "lessons": [
+        {
+          "id": "u2-l1",
+          "title": "Your comfortable range",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u2-range-info",
+              "type": "info",
+              "title": "Easy, not far",
+              "prompt": "",
+              "source": ["E2", "§2.4"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Range grows slowly, over weeks. In each session, only go as high and as low as feels easy. The top of your comfortable range is a limit the app never rewards you for passing."
+              ]
+            },
+            {
+              "id": "u2-glide",
+              "type": "glide",
+              "title": "Slide up and down",
+              "prompt": "On “ng”, slide from low to high and back, as far as is easy. Watch the line move.",
+              "source": ["E2"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "ng",
+              "direction": "up-down",
+              "reps": 3
+            }
+          ]
+        },
+        {
+          "id": "u2-l2",
+          "title": "Match the tone",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u2-match-sine",
+              "type": "match-pitch",
+              "title": "Hum to the tone",
+              "prompt": "Listen to the tone, then hum it. Keep the dot on the line for a moment.",
+              "source": ["E1"],
+              "volume": "quiet",
+              "pass": { "kind": "pitch-match", "toleranceCents": 50, "holdMs": 600, "required": 6 },
+              "sound": "mm",
+              "offsetsSt": [0, -1, 1, 0, 2, -2, 1, 0],
+              "tone": "sine"
+            }
+          ]
+        },
+        {
+          "id": "u2-l3",
+          "title": "Mm-hm",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u2-mhm",
+              "type": "hold",
+              "title": "Mm-hm at your target",
+              "prompt": "Say a light, friendly “mm-hm?” as if agreeing with a friend. Keep the dot in the band.",
+              "source": ["E3"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch"], "minVoicedS": 3 },
+              "items": ["mm-hm?", "uh-huh?", "mm-hm!", "oh, hi!", "mm-hm?", "uh-huh!"],
+              "zones": ["pitch"]
+            }
+          ]
+        },
+        {
+          "id": "u2-l4",
+          "title": "Pitch check",
+          "minutes": 5,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u2-check",
+              "type": "match-pitch",
+              "title": "Land on the note",
+              "prompt": "Ten notes in a voice-like tone. Hum or say “mm-hm” on each and hold it.",
+              "source": ["§4.1 Unit 2", "E1"],
+              "volume": "quiet",
+              "pass": { "kind": "pitch-match", "toleranceCents": 50, "holdMs": 600, "required": 8 },
+              "sound": "mm-hm",
+              "offsetsSt": [0, 1, -1, 2, 0, -2, 1, 2, 0, -1],
+              "tone": "voice"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u3",
+      "number": 3,
+      "title": "Light weight",
+      "dimension": "weight",
+      "summary": "Let your voice get lighter, using slides and small, friendly sounds.",
+      "gate": "u3-check",
+      "lessons": [
+        {
+          "id": "u3-l1",
+          "title": "What weight is",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u3-info",
+              "type": "info",
+              "title": "Heavy and light",
+              "prompt": "",
+              "source": ["§1.4", "§3.4"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Weight is how heavy or buzzy a voice sounds. Going higher usually makes a voice lighter, and going lower makes it heavier, which is why pitch and weight are trained together.",
+                "The weight number in NewVoice is an estimate from the sound’s spectrum, compared with your own starting point. Treat it as a hint, not a measurement of how you sound to others.",
+                "Light is not breathy. Don’t add air to hide weight: it tires the voice and is hard to undo."
+              ]
+            },
+            {
+              "id": "u3-slide-up",
+              "type": "glide",
+              "title": "Slide up, let it lighten",
+              "prompt": "On “oo”, slide up from a relaxed middle note and let the sound get lighter as it rises. Stop well before anything feels tight.",
+              "source": ["E4"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "oo",
+              "direction": "up",
+              "reps": 4
+            }
+          ]
+        },
+        {
+          "id": "u3-l2",
+          "title": "Aww, puppy",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u3-aww",
+              "type": "hold",
+              "title": "Small, friendly sounds",
+              "prompt": "Say these the way you’d talk to a puppy: light and easy. Keep the dot in the band.",
+              "source": ["E3"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch"], "minVoicedS": 3 },
+              "items": ["aww", "aww, look!", "hey!", "mm-hm?", "oh, hello!", "aww, hi"],
+              "zones": ["pitch"]
+            }
+          ]
+        },
+        {
+          "id": "u3-l3",
+          "title": "Bring light down",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u3-slide-down",
+              "type": "glide",
+              "title": "Keep it light on the way down",
+              "prompt": "Start light and high-ish on “oo”, then slide down slowly, keeping the light quality. Stop where it starts to get heavy.",
+              "source": ["E4"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "oo",
+              "direction": "down",
+              "reps": 4
+            },
+            {
+              "id": "u3-layer",
+              "type": "glide",
+              "title": "Feel the difference",
+              "prompt": "Once only: slide down and let the voice get heavier, then slide back up without lightening. This is to feel weight, not to practise it.",
+              "source": ["E5"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "ah",
+              "direction": "up-down",
+              "reps": 1
+            }
+          ]
+        },
+        {
+          "id": "u3-l4",
+          "title": "Light and easy",
+          "minutes": 5,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u3-check",
+              "type": "hold",
+              "title": "Light phrases",
+              "prompt": "Say each phrase lightly, at your target. This checkpoint passes after three separate sessions.",
+              "source": ["§4.1 Unit 3", "E3", "§3.4"],
+              "volume": "normal",
+              "pass": { "kind": "weight-lighter", "sd": 0.5, "sessions": 3 },
+              "items": ["Hello, how are you?", "Oh, that’s lovely.", "See you soon!", "Mm-hm, I agree.", "What a nice day."],
+              "zones": ["pitch"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u4",
+      "number": 4,
+      "title": "Size",
+      "dimension": "size",
+      "summary": "Make the space your voice passes through smaller, using whispers.",
+      "gate": "u4-check",
+      "lessons": [
+        {
+          "id": "u4-l1",
+          "title": "Your whisper",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u4-info",
+              "type": "info",
+              "title": "Why whisper",
+              "prompt": "",
+              "source": ["§1.3", "E6"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "A whisper has no pitch, so you can change size without pitch getting in the way. It is also quiet enough to practise almost anywhere.",
+                "Whisper softly. A forced whisper is harder on the voice than speaking."
+              ]
+            },
+            {
+              "id": "u4-neutral",
+              "type": "whisper",
+              "title": "Your ordinary whisper",
+              "prompt": "Whisper a long “ee” the way you normally would, for about 4 seconds. This is your reference for the next lessons.",
+              "source": ["§4.1 Unit 4"],
+              "volume": "quiet",
+              "reference": true,
+              "pass": { "kind": "completion" },
+              "sound": "ee",
+              "condition": "neutral",
+              "seconds": 5
+            }
+          ]
+        },
+        {
+          "id": "u4-l2",
+          "title": "Whisper siren",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u4-siren",
+              "type": "whisper",
+              "title": "Slide the whisper up",
+              "prompt": "Whisper “ee” and slide it up like a tiny siren. Make the bar climb.",
+              "source": ["E6"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "ee",
+              "condition": "target",
+              "seconds": 8
+            }
+          ]
+        },
+        {
+          "id": "u4-l3",
+          "title": "Big dog, small dog",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u4-dogs",
+              "type": "whisper",
+              "title": "Small dog panting",
+              "prompt": "Pant softly like a big dog, then like a small dog. Hold the small-dog shape and whisper “hee”.",
+              "source": ["E7"],
+              "volume": "quiet",
+              "pass": { "kind": "completion" },
+              "sound": "hee",
+              "condition": "target",
+              "seconds": 8
+            },
+            {
+              "id": "u4-swallow",
+              "type": "info",
+              "title": "Feel the rise",
+              "prompt": "",
+              "source": ["E8"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Put a fingertip lightly on your throat and swallow: you’ll feel the bump rise and fall. Next time, let it rise just a little and stay there while you breathe. Never hold it with force."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "u4-l4",
+          "title": "Small whisper check",
+          "minutes": 4,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u4-check",
+              "type": "whisper",
+              "title": "Smaller and brighter",
+              "prompt": "Whisper “ee” with the small-dog shape and hold it for about 4 seconds.",
+              "source": ["§4.1 Unit 4", "E6", "E7"],
+              "volume": "quiet",
+              "pass": { "kind": "whisper-rise", "ratio": 1.08 },
+              "sound": "ee",
+              "condition": "target",
+              "seconds": 6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u5",
+      "number": 5,
+      "title": "Brightness",
+      "dimension": "brightness",
+      "summary": "Brighten each vowel with your tongue and lips.",
+      "gate": "u5-check",
+      "lessons": [
+        {
+          "id": "u5-l1",
+          "title": "Tongue forward",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u5-info",
+              "type": "info",
+              "title": "Move the dot right",
+              "prompt": "",
+              "source": ["§1.3", "§2.5", "E9"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Brightness follows where your tongue sits and the shape of your lips. A forward tongue and slightly spread lips brighten a vowel; a pulled-back tongue and rounded lips darken it.",
+                "Use the chart as your guide: make the dot move right and up the brightness scale."
+              ]
+            },
+            {
+              "id": "u5-ee",
+              "type": "hold",
+              "title": "Bright “ee”",
+              "prompt": "Say each word with your tongue forward, as if smiling slightly. Keep the brightness dot in the band.",
+              "source": ["E9"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["f2"], "minVoicedS": 2 },
+              "items": ["see", "key", "me", "tea", "bee", "we"],
+              "vowel": "iy",
+              "zones": ["f2"]
+            }
+          ]
+        },
+        {
+          "id": "u5-l2",
+          "title": "Smile and round",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u5-smile",
+              "type": "read",
+              "title": "Rounded, then spread",
+              "prompt": "Read the line once with rounded lips, then once with lips gently spread. Watch brightness change.",
+              "source": ["E10"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "lines": ["We need three green leaves.", "We need three green leaves."],
+              "focus": "zones"
+            }
+          ]
+        },
+        {
+          "id": "u5-l3",
+          "title": "Vowel ladder",
+          "minutes": 6,
+          "exercises": [
+            {
+              "id": "u5-ladder",
+              "type": "vowel-ladder",
+              "title": "Climb the ladder",
+              "prompt": "Hold each vowel for about two seconds and brighten it. Keep your pitch where it is comfortable.",
+              "source": ["E9", "§4.1 Unit 5"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "vowels": [
+                { "code": "iy", "word": "see" },
+                { "code": "ih", "word": "sit" },
+                { "code": "ei", "word": "say" },
+                { "code": "eh", "word": "bed" },
+                { "code": "ae", "word": "cat" },
+                { "code": "ah", "word": "father" },
+                { "code": "uh", "word": "cup" }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "u5-l4",
+          "title": "Brightness check",
+          "minutes": 6,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u5-check",
+              "type": "vowel-ladder",
+              "title": "Six bright vowels",
+              "prompt": "Hold each vowel for about two seconds, as bright as is comfortable. Six of the seven need to reach your target.",
+              "source": ["§4.1 Unit 5", "§3.3"],
+              "volume": "normal",
+              "pass": { "kind": "resonance-vowels", "score": 0.5, "vowels": 6 },
+              "vowels": [
+                { "code": "iy", "word": "see" },
+                { "code": "ih", "word": "sit" },
+                { "code": "ei", "word": "say" },
+                { "code": "eh", "word": "bed" },
+                { "code": "ae", "word": "cat" },
+                { "code": "ah", "word": "father" },
+                { "code": "uh", "word": "cup" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u6",
+      "number": 6,
+      "title": "Combine",
+      "dimension": "combine",
+      "summary": "Hold pitch, lightness and brightness together, from a vowel to words.",
+      "gate": "u6-check",
+      "lessons": [
+        {
+          "id": "u6-l1",
+          "title": "Lock in on a vowel",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u6-vowel",
+              "type": "hold",
+              "title": "Hold “ee”",
+              "prompt": "Find your target on a light, bright “ee” and hold it. Keep both dots in their bands.",
+              "source": ["E14"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch", "f2"], "minVoicedS": 3 },
+              "items": ["ee", "ee", "ee"],
+              "vowel": "iy",
+              "zones": ["pitch", "f2"]
+            }
+          ]
+        },
+        {
+          "id": "u6-l2",
+          "title": "Words",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u6-words",
+              "type": "hold",
+              "title": "Lock and speak",
+              "prompt": "Keep the same setting from “ee” and say each word.",
+              "source": ["E14"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch", "f2"], "minVoicedS": 4 },
+              "items": ["see", "me", "key", "tea", "feet", "keep", "seed", "read", "team", "leaf"],
+              "vowel": "iy",
+              "zones": ["pitch", "f2"]
+            }
+          ]
+        },
+        {
+          "id": "u6-l3",
+          "title": "Twenty words",
+          "minutes": 6,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u6-check",
+              "type": "hold",
+              "title": "Twenty words",
+              "prompt": "Say each word with your target pitch and brightness. Aim to stay in the bands most of the time.",
+              "source": ["§4.1 Unit 6", "E14"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch", "f2"], "minVoicedS": 8 },
+              "items": ["see", "me", "key", "bee", "tea", "feet", "keep", "seed", "read", "team", "leaf", "need", "deep", "sheep", "green", "clean", "week", "peace", "cheese", "sweet"],
+              "vowel": "iy",
+              "zones": ["pitch", "f2"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u7",
+      "number": 7,
+      "title": "Melody",
+      "dimension": "melody",
+      "summary": "Use more of your range in each phrase, if that’s a style you want.",
+      "gate": "u7-check",
+      "lessons": [
+        {
+          "id": "u7-l1",
+          "title": "Your everyday melody",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u7-info",
+              "type": "info",
+              "title": "A style choice",
+              "prompt": "",
+              "source": ["§1.6"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Listeners tend to hear more upward movement and a wider range within each phrase as lighter and more expressive. Research also shows people of every gender use plenty of different melodies, so this is a style to have available, not a rule."
+              ]
+            },
+            {
+              "id": "u7-reference",
+              "type": "read",
+              "title": "Read it your usual way",
+              "prompt": "Read these lines in your usual way, at your target pitch. This is your reference for the next lessons.",
+              "source": ["E15"],
+              "volume": "normal",
+              "reference": true,
+              "pass": { "kind": "completion" },
+              "lines": ["I made soup for dinner.", "Are you coming tonight?", "The train was late again.", "Did you see the moon?"],
+              "focus": "melody"
+            }
+          ]
+        },
+        {
+          "id": "u7-l2",
+          "title": "Questions that rise",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u7-questions",
+              "type": "read",
+              "title": "Let it rise",
+              "prompt": "Let each question lift at the end. Watch the end of the line curve up.",
+              "source": ["E15", "§3.5"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "lines": ["Is that your bike?", "Do you want some tea?", "Really?", "Can you hear me?", "Is it raining?"],
+              "focus": "melody"
+            }
+          ]
+        },
+        {
+          "id": "u7-l3",
+          "title": "Melody check",
+          "minutes": 5,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u7-check",
+              "type": "read",
+              "title": "Statements and questions",
+              "prompt": "Read each line with a little more movement than your usual way. Let questions rise.",
+              "source": ["§4.1 Unit 7", "E15"],
+              "volume": "normal",
+              "pass": { "kind": "st-range", "overReferenceSt": 3, "risingShare": 0.5 },
+              "lines": ["I made soup for dinner.", "Are you coming tonight?", "What a lovely surprise!", "Did you see the moon?", "We should go to the sea.", "Is it far from here?"],
+              "focus": "melody"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u8",
+      "number": 8,
+      "title": "Articulate",
+      "dimension": "articulation",
+      "summary": "Lighter consonants, and keeping your voice in laughs and little sounds.",
+      "gate": "u8-check",
+      "lessons": [
+        {
+          "id": "u8-l1",
+          "title": "Light consonants",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u8-info",
+              "type": "info",
+              "title": "Forward and light",
+              "prompt": "",
+              "source": ["§1.7"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Consonants made lightly at the front of the mouth help keep vowels bright. Touch, don’t press: the tip of the tongue taps, the lips meet softly.",
+                "The evidence that consonants alone change how a voice is heard is weak, so treat this as polish."
+              ]
+            },
+            {
+              "id": "u8-tongue",
+              "type": "read",
+              "title": "Tip of the tongue",
+              "prompt": "Read lightly, tapping each consonant with the tip of your tongue. Keep your pitch in the band.",
+              "source": ["§1.7", "§2.2"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "lines": ["Little lilies line the lane.", "Tiny tin tins tumble.", "She sells sea shells.", "Light the little lamp."],
+              "focus": "pitch"
+            }
+          ]
+        },
+        {
+          "id": "u8-l2",
+          "title": "Laughs and little sounds",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u8-nonverbal",
+              "type": "self-rate",
+              "title": "Oops!",
+              "prompt": "These sounds slip back to an old setting unless practised. Find your target on “mm-hm”, then make each sound.",
+              "source": ["E19", "§1.9"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "items": ["a short laugh", "“oops!”", "“ouch!”", "“mm-hm”", "“oh no!”"],
+              "question": "How close to your target did that feel?"
+            }
+          ]
+        },
+        {
+          "id": "u8-l3",
+          "title": "Calling out",
+          "minutes": 4,
+          "exercises": [
+            {
+              "id": "u8-call",
+              "type": "self-rate",
+              "title": "Across the room",
+              "prompt": "Call out as if to someone across a room, without shouting. Loudness pulls voices toward weight, so keep it light.",
+              "source": ["E19", "§1.8"],
+              "volume": "loud",
+              "pass": { "kind": "completion" },
+              "items": ["“Hey, over here!”", "“Dinner’s ready!”", "“Wait for me!”"],
+              "question": "How close to your target did that feel?"
+            }
+          ]
+        },
+        {
+          "id": "u8-l4",
+          "title": "Little sounds check",
+          "minutes": 5,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u8-check",
+              "type": "self-rate",
+              "title": "Sounds in your voice",
+              "prompt": "Make each sound in your target voice, then rate it. Your rating and your pitch both count.",
+              "source": ["§4.1 Unit 8", "E19"],
+              "volume": "normal",
+              "pass": { "kind": "self-rated", "minRating": 6, "share": 0.5 },
+              "items": ["a short laugh", "“oops!”", "“ouch!”", "“mm-hm”", "“oh no!”", "“yay!”"],
+              "question": "How close to your target did that feel?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u9",
+      "number": 9,
+      "title": "Carryover",
+      "dimension": "carryover",
+      "summary": "From reading to talking freely, keeping your new setting.",
+      "gate": "u9-check",
+      "lessons": [
+        {
+          "id": "u9-l1",
+          "title": "Reading",
+          "minutes": 6,
+          "exercises": [
+            {
+              "id": "u9-read",
+              "type": "read",
+              "title": "A short passage",
+              "prompt": "Read the passage at your target, at a relaxed pace.",
+              "source": ["E16", "§2.5"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch"], "minVoicedS": 8 },
+              "lines": [
+                "The blue spot is on the key again.",
+                "How hard did he hit him?",
+                "We were away a year ago.",
+                "We eat eggs every Easter.",
+                "My mama makes lemon muffins.",
+                "Peter will keep at the peak."
+              ],
+              "focus": "zones"
+            }
+          ]
+        },
+        {
+          "id": "u9-l2",
+          "title": "Prompts",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u9-prompt",
+              "type": "free-speech",
+              "title": "Thirty seconds",
+              "prompt": "Talk for 30 seconds about one of these, in your target voice.",
+              "source": ["§2.5 carryover", "E16"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "prompts": ["Your favourite season, and why.", "How to make a cup of tea.", "A film you liked."],
+              "seconds": 30
+            }
+          ]
+        },
+        {
+          "id": "u9-l3",
+          "title": "One minute",
+          "minutes": 5,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u9-check",
+              "type": "free-speech",
+              "title": "Talk for a minute",
+              "prompt": "Talk for a minute. This checkpoint passes when your talking pitch stays in your zone, steadily, across three sessions.",
+              "source": ["§4.1 Unit 9", "§3.2"],
+              "volume": "normal",
+              "pass": { "kind": "free-speech-stable", "sessions": 3, "spreadSt": 1.5, "minVoicedS": 20 },
+              "prompts": ["What you did last weekend.", "Somewhere you’d like to live.", "A skill you’d like to learn.", "Your perfect lazy day."],
+              "seconds": 60
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "u10",
+      "number": 10,
+      "title": "Life",
+      "dimension": "life",
+      "summary": "Phone calls, loud rooms, feelings, and the world outside.",
+      "gate": "u10-check",
+      "lessons": [
+        {
+          "id": "u10-l1",
+          "title": "Phone voice",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u10-phone-info",
+              "type": "info",
+              "title": "On the phone",
+              "prompt": "",
+              "source": ["§1.9"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "body": [
+                "Phone lines cut off the lowest and highest parts of a voice, so brightness and lightness carry more of the message there. A bright, light setting matters more on a call than pitch does."
+              ]
+            },
+            {
+              "id": "u10-phone",
+              "type": "read",
+              "title": "Answer the phone",
+              "prompt": "Read as if answering a call. Hold the phone as you would on a call.",
+              "source": ["§1.9", "§4.1 Unit 10"],
+              "volume": "normal",
+              "pass": { "kind": "in-zone", "share": 0.7, "zones": ["pitch"], "minVoicedS": 4 },
+              "lines": ["Hello, this is me speaking.", "Sorry, could you say that again?", "Yes, Tuesday at three works.", "Thanks so much, bye!"],
+              "focus": "zones"
+            }
+          ]
+        },
+        {
+          "id": "u10-l2",
+          "title": "Loud and emotional",
+          "minutes": 5,
+          "exercises": [
+            {
+              "id": "u10-loud",
+              "type": "read",
+              "title": "Projecting",
+              "prompt": "Speak up as in a noisy café. Add brightness, not weight.",
+              "source": ["§1.8", "§4.1 Unit 10"],
+              "volume": "loud",
+              "pass": { "kind": "in-zone", "share": 0.6, "zones": ["pitch"], "minVoicedS": 3 },
+              "lines": ["Can I get a large tea, please?", "Sorry, what was that?", "It’s for Sam!"],
+              "focus": "zones"
+            },
+            {
+              "id": "u10-emotion",
+              "type": "read",
+              "title": "With feeling",
+              "prompt": "Read each line with the feeling in brackets, staying in your setting.",
+              "source": ["§4.1 Unit 10", "E15"],
+              "volume": "normal",
+              "pass": { "kind": "completion" },
+              "lines": ["(excited) We won!", "(annoyed) That’s the third time today.", "(sad) I’ll miss you.", "(surprised) No way, really?"],
+              "focus": "melody"
+            }
+          ]
+        },
+        {
+          "id": "u10-l3",
+          "title": "Out in the world",
+          "minutes": 3,
+          "checkpoint": true,
+          "exercises": [
+            {
+              "id": "u10-check",
+              "type": "mission",
+              "title": "A voice in the wild",
+              "prompt": "Pick one when you feel ready. There’s no deadline, and it’s fine to choose an easy one.",
+              "source": ["§4.1 Unit 10", "§2.5 carryover"],
+              "volume": "silent",
+              "pass": { "kind": "self-report" },
+              "ideas": ["Order a drink at a café.", "Make a short phone call, like booking an appointment.", "Say hello to a neighbour or shop assistant.", "Leave a voice message for a friend."]
+            },
+            {
+              "id": "u10-journal",
+              "type": "journal",
+              "title": "Looking back",
+              "prompt": "Optional. Only you can read this.",
+              "source": ["§4.5", "§2.7"],
+              "volume": "silent",
+              "pass": { "kind": "completion" },
+              "questions": ["How did it go?", "What felt easier than you expected?"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
