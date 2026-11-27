@@ -969,7 +969,7 @@
               "prompt": "Talk for a minute. This checkpoint passes when your talking pitch stays in your zone, steadily, across three sessions.",
               "source": ["§4.1 Unit 9", "§3.2"],
               "volume": "normal",
-              "pass": { "kind": "free-speech-stable", "sessions": 3, "spreadSt": 1.5, "minVoicedS": 20 },
+              "pass": { "kind": "free-speech-stable", "sessions": 3, "spreadSt": 2.5, "minVoicedS": 20 },
               "prompts": ["What you did last weekend.", "Somewhere you’d like to live.", "A skill you’d like to learn.", "Your perfect lazy day."],
               "seconds": 60
             }
